@@ -23,8 +23,8 @@ function App() {
 
   if (isLoading) return <div className="loading-screen">Loading CollabBase...</div>;
   if (currentPage === 'landing') return <LandingPage isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode((value) => !value)} onSignIn={() => setCurrentPage('login')} />;
-  if (currentPage === 'login') return <Login onSignedIn={() => setCurrentPage('dashboard')} />;
-  if (!isAuthenticated) return <Login onSignedIn={() => setCurrentPage('dashboard')} />;
+  if (currentPage === 'login') return <Login isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode((value) => !value)} onSignedIn={() => setCurrentPage('dashboard')} />;
+  if (!isAuthenticated) return <Login isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode((value) => !value)} onSignedIn={() => setCurrentPage('dashboard')} />;
   return <DashboardLayout isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode((value) => !value)} activeTab={activeTab} setActiveTab={setActiveTab} onBackToLanding={() => setCurrentPage('landing')}><Dashboard activeTab={activeTab} setActiveTab={setActiveTab} /></DashboardLayout>;
 }
 
