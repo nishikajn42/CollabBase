@@ -1,0 +1,16 @@
+import { ArrowLeft, Bell, ChevronDown, Home, LogOut, MessageCircle, MoonStar, Network, Search, SunMedium, UserRound, UsersRound, X } from 'lucide-react';
+import { useState } from 'react';
+import { demoUsers } from '../data/seedData';
+import { useAuth } from '../context/AuthContext';
+
+const tabs = [{ id: 'home', label: 'Home Feed', icon: Home }, { id: 'network', label: 'Network & Matches', icon: UsersRound }, { id: 'messages', label: 'Messaging', icon: MessageCircle }, { id: 'profile', label: 'My Profile', icon: UserRound }];
+
+export default function DashboardLayout({ activeTab, setActiveTab, isDarkMode, onToggleTheme, onBackToLanding, children }) {
+  const { currentUser, switchProfile, signOut } = useAuth();
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  return <div className="dashboard-shell">
+    <header className="topbar"><div className="brand-lockup"><span className="brand-mark"><Network size={20} /></span><span>CollabBase</span></div><button className="back-landing" onClick={onBackToLanding}><ArrowLeft size={15} /> Back to Landing Page</button><div className="top-search"><Search size={16} /><input placeholder="Search projects, skills, people" /></div><div className="top-actions"><span className="mode-pill"><span className="live-dot" /> Demo mode</span><button className="icon-button" aria-label="Toggle theme" aria-pressed={isDarkMode} onClick={onToggleTheme}>{isDarkMode ? <SunMedium size={17} /> : <MoonStar size={17} />}</button><button className="icon-button" aria-label="Notifications"><Bell size={18} /></button><button className="account-toggle" onClick={() => setSwitcherOpen((open) => !open)}><span className="avatar small" style={{ background: currentUser.avatarColor }}>{currentUser.initials}</span><span className="account-name">{currentUser.shortName}</span><ChevronDown size={15} /></button></div>{switcherOpen && <div className="account-menu"><div className="menu-heading">Switch demo account <button onClick={() => setSwitcherOpen(false)}><X size={15} /></button></div>{demoUsers.map((user) => <button key={user.id} className="menu-profile" onClick={() => { switchProfile(user.id); setSwitcherOpen(false); }}><span className="avatar small" style={{ background: user.avatarColor }}>{user.initials}</span><span><strong>{user.name}</strong><small>{user.role}</small></span></button>)}<button className="menu-signout" onClick={signOut}><LogOut size={15} /> Sign out</button></div>}</header>
+    <aside className="sidebar"><div className="sidebar-label">Workspace</div><nav>{tabs.map(({ id, label, icon: Icon }) => <button key={id} className={activeTab === id ? 'side-link active' : 'side-link'} onClick={() => setActiveTab(id)}><Icon size={18} /><span>{label}</span>{id === 'messages' && <b>3</b>}</button>)}</nav><div className="sidebar-bottom"><div className="sidebar-context"><span className="status-ring" /><div><strong>Campus network</strong><small>1,284 students online</small></div></div><button className="side-link support"><span className="help-mark">?</span><span>Help center</span></button></div></aside>
+    <main className="dashboard-main">{children}</main>
+  </div>;
+}
