@@ -51,7 +51,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   useEffect(() => {
     if (!isOwnProfile && profileHandle) {
       setIsLoadingUser(true);
-      fetch(`import.meta.env.VITE_API_URL/api/auth/user/${profileHandle}`)
+      fetch(`${import.meta.env.VITE_API_URL}/api/auth/user/${profileHandle}`)
         .then(res => res.json())
         .then(data => {
           if (!data.error) setUserData(data);
@@ -80,7 +80,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   useEffect(() => {
     if (userData?.githubUsername) {
       setGhLoading(true);
-      fetch(`import.meta.env.VITE_API_URL/api/github/analyze/${userData.githubUsername}`)
+      fetch(`${import.meta.env.VITE_API_URL}/api/github/analyze/${userData.githubUsername}`)
         .then(res => res.json())
         .then(data => {
           if (!data.error) setGithubData(data);
@@ -96,7 +96,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
     setUserData(newUserData); 
     setActiveModal(null);
     try {
-      await fetch('import.meta.env.VITE_API_URL/api/auth/update-profile', {
+      await fetch('${import.meta.env.VITE_API_URL}/api/auth/update-profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: userData._id, ...updates })
