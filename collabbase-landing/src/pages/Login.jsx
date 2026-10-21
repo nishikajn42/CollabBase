@@ -26,25 +26,58 @@ const Login = ({ isDarkMode, onToggleTheme, onSignedIn }) => {
 
   const handleGoogleSuccess = async (tokenResponse) => {
     try {
-      const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      // 1. Fetch user details from Google
+      const userInfo = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
         headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-      });
-      if (!response.ok) throw new Error('Google account verification failed.');
+      }).then(res => res.json());
 
-      const userInfo = await response.json();
-      const userEmail = typeof userInfo.email === 'string' ? userInfo.email.trim().toLowerCase() : '';
+      const userEmail = userInfo.email;
+
+      // 2. Restrict access to MITS domains
       if (!userEmail.endsWith('@mitsgwl.ac.in') && !userEmail.endsWith('@mitsgwalior.in')) {
-        setIsVerified(false);
-        setError('Please use your official MITS email address to continue.');
+        setError('Access restricted to campus students. Please use your official MITS email.');
         return;
       }
 
+      // 3. SEND DATA TO YOUR BACKEND
+      const backendResponse = await fetch('http://localhost:5000/api/auth/google-login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          googleId: userInfo.sub, // Google's unique ID for the user
+          email: userInfo.email,
+          fullName: userInfo.name,
+          profilePicture: userInfo.picture
+        })
+      });
+
+      const data = await backendResponse.json();
+
+      if (!backendResponse.ok) {
+        setError(data.error || 'Failed to connect to database.');
+        return;
+      }
+
+      // 4. Check profile completion status
       setError('');
-      setIsVerified(true);
-      onSignedIn?.(userInfo);
-    } catch {
-      setIsVerified(false);
-      setError('We couldn’t verify your Google account. Please try again.');
+      console.log('✅ Successfully saved to MongoDB:', data.user);
+
+      // We add the routing logic (Dashboard vs Onboarding) in the next step!
+
+      if (!data.user.isProfileComplete) {
+        // First-time user: redirect to Onboarding to collect GitHub username, Branch, and Year
+        onSignedIn('onboarding', data.user); 
+      } else {
+        // Returning user with complete profile: go straight to Dashboard
+        onSignedIn('dashboard', data.user); 
+      }
+      
+
+    } catch (err) {
+      console.error(err);
+      setError('Authentication failed. Please try again.');
     }
   };
 
