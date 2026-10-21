@@ -38,6 +38,7 @@ const getCoderBadge = (langs) => {
 function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   const [userData, setUserData] = useState(isOwnProfile ? currentUser : null);
   const [isLoadingUser, setIsLoadingUser] = useState(!isOwnProfile);
+  const [userNotFound, setUserNotFound] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
   
   const [githubData, setGithubData] = useState(null);
@@ -51,13 +52,21 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   useEffect(() => {
     if (!isOwnProfile && profileHandle) {
       setIsLoadingUser(true);
+      setUserNotFound(false);
       fetch(`${import.meta.env.VITE_API_URL}/api/auth/user/${profileHandle}`)
         .then(res => res.json())
         .then(data => {
-          if (!data.error) setUserData(data);
+          if (!data || data.error) {
+            setUserNotFound(true);
+          } else {
+            setUserData(data);
+          }
           setIsLoadingUser(false);
         })
-        .catch(() => setIsLoadingUser(false));
+        .catch(() => {
+          setUserNotFound(true);
+          setIsLoadingUser(false);
+        });
     } else {
       setUserData(currentUser);
       setIsLoadingUser(false);
@@ -87,6 +96,8 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
           setGhLoading(false);
         })
         .catch(() => setGhLoading(false));
+    } else {
+      setGithubData(null);
     }
   }, [userData?.githubUsername]);
 
@@ -96,12 +107,13 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
     setUserData(newUserData); 
     setActiveModal(null);
     
-    // NEW: Instantly update the browser cache so changes survive a refresh!
+    // UPDATE CACHE SO IT SURVIVES A REFRESH
     try {
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
       localStorage.setItem('user', JSON.stringify({ ...storedUser, ...updates }));
     } catch (e) { console.error("Cache update failed"); }
 
+    // SAVE TO DATABASE
     try {
       await fetch(`${import.meta.env.VITE_API_URL}/api/auth/update-profile`, {
         method: 'PUT',
@@ -141,12 +153,26 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
     }
   };
 
-  // Show loading screen if fetching another user
-  if (isLoadingUser || !userData) {
+  // Fixed Loading State to prevent infinite spin
+  if (isLoadingUser) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center space-y-4">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600 dark:border-slate-800 dark:border-t-blue-500"></div>
         <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Loading profile @{profileHandle}...</p>
+      </div>
+    );
+  }
+
+  // Handle User Not Found gracefully
+  if (userNotFound || !userData) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center space-y-4 text-center">
+        <div className="rounded-full bg-slate-100 p-4 dark:bg-slate-800">
+          <Search size={32} className="text-slate-400" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white">User not found</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">The profile @{profileHandle} does not exist or could not be loaded.</p>
+        <Link to="/dashboard" className="mt-4 rounded-xl bg-blue-600 px-6 py-2 text-sm font-bold text-white transition hover:bg-blue-700">Back to Feed</Link>
       </div>
     );
   }
@@ -282,6 +308,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
             <div className="py-12 text-center text-sm font-medium text-slate-400">Syncing with GitHub...</div>
           ) : githubData ? (
             <div className="space-y-8">
+              
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   {githubData.avatarUrl ? (
@@ -302,7 +329,6 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                 <Sparkles size={20} className="text-blue-400 opacity-80" />
               </div>
 
-              {/* POSITIVE EMPTY STATE FOR NEW GITHUB USERS */}
               {githubData.publicRepos === 0 ? (
                 <div className="flex flex-col items-center justify-center py-6 text-center">
                   <div className="mb-3 rounded-full bg-blue-500/10 p-3">
@@ -314,7 +340,6 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                   </p>
                 </div>
               ) : (
-                /* Normal Stats Grid for Active Users */
                 <>
                   {githubData.bio && <p className="text-sm leading-relaxed text-slate-300">{githubData.bio}</p>}
                   <div className="grid grid-cols-3 gap-4">
@@ -339,12 +364,18 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                     <p className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-400">Language Distribution</p>
                     <div className="space-y-4">
                       {githubData.topLanguages?.map((lang, idx) => {
-                        const glowColors = ['bg-blue-500', 'bg-purple-500', 'bg-cyan-400', 'bg-emerald-500'];
+                        const glowColors = [
+                          'bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.8)]',
+                          'bg-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.8)]',
+                          'bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.8)]',
+                          'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]'
+                        ];
+                        const colorClass = glowColors[idx % glowColors.length];
                         return (
                           <div key={lang.name} className="flex items-center gap-4">
                             <div className="w-24 text-xs font-semibold text-slate-200">{lang.name}</div>
                             <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800/80">
-                              <div style={{ width: `${lang.percent}%` }} className={`absolute left-0 top-0 h-full rounded-full ${glowColors[idx % 4]}`} />
+                              <div style={{ width: `${lang.percent}%` }} className={`absolute left-0 top-0 h-full rounded-full ${colorClass}`} />
                             </div>
                             <div className="w-12 text-right font-mono text-xs font-bold text-slate-400">{lang.percent}%</div>
                           </div>
@@ -354,19 +385,24 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                   </div>
                 </>
               )}
+
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-800 border border-slate-700 shadow-inner">
                 <Github size={28} className="text-slate-400" />
               </div>
-              <h3 className="mb-2 text-lg font-bold text-white">{isOwnProfile ? 'Connect GitHub' : 'GitHub Not Linked'}</h3>
+              <h3 className="mb-2 text-lg font-bold text-white">
+                {userData?.githubUsername ? "GitHub Connection Failed" : (isOwnProfile ? 'Connect GitHub' : 'GitHub Not Linked')}
+              </h3>
               <p className="mb-6 max-w-sm text-sm leading-relaxed text-slate-400">
-                {isOwnProfile ? 'Link your account to unlock real-time analysis, contribution signals, and dynamic platform badges.' : `${cleanName} hasn't linked their GitHub account yet.`}
+                {userData?.githubUsername 
+                  ? "We couldn't fetch the stats. Double-check your exact GitHub username in your profile settings."
+                  : (isOwnProfile ? 'Link your account to unlock real-time analysis, contribution signals, and dynamic platform badges.' : `${cleanName} hasn't linked their GitHub account yet.`)}
               </p>
               {isOwnProfile && (
                 <button onClick={() => setActiveModal('edit-profile')} className="rounded-xl bg-white px-6 py-2.5 text-sm font-bold text-slate-900 shadow-lg transition hover:bg-slate-200">
-                  Link Account Now
+                  {userData?.githubUsername ? "Fix Username" : "Link Account Now"}
                 </button>
               )}
             </div>
