@@ -104,6 +104,7 @@ export const projectPosts = [
   { id: 'project-6', title: 'Canteen Queue Predictor', authorId: 'user-backend', description: 'Predict peak lunch windows from anonymous footfall and order patterns.', tags: ['Python', 'SQL', 'Data Science'], neededRole: 'Data Scientist', applicants: 2, time: '3d ago', status: 'Open' },
   { id: 'project-7', title: 'Club Events Calendar', authorId: 'user-frontend', description: 'A single, beautiful calendar for every technical and cultural club on campus.', tags: ['React', 'Tailwind CSS', 'Figma'], neededRole: 'UI Engineer', applicants: 7, time: '4d ago', status: 'Open' },
   { id: 'project-8', title: 'Campus Safety Companion', authorId: 'user-poster', description: 'Design an accessible incident reporting and trusted-contact workflow.', tags: ['React', 'Node.js', 'MongoDB'], neededRole: 'UX Researcher', applicants: 3, time: '5d ago', status: 'Open' },
+  { id: 'project-9', title: 'Campus Credential Wallet', authorId: 'user-backend', description: 'Prototype a student-owned wallet for verifiable club memberships and event credentials.', tags: ['Ethereum', 'Solidity', 'React'], neededRole: 'Web3 Developer', applicants: 2, time: '6h ago', status: 'Open', category: 'Web3', deadlineHours: 54 },
 ];
 
 export const conversations = [

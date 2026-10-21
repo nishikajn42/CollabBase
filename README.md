@@ -105,7 +105,7 @@ A strong frontend developer often can't find a backend or database developer bef
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/<your-username>/collabbase.git
+git clone https://github.com/nishikajn42/CollabBase.git
 cd collabbase
 
 # 2. Install backend dependencies

@@ -1,0 +1,14 @@
+# Dependency directories
+node_modules/
+/backend/node_modules/
+/collabbase-landing/node_modules/
+
+# Environment variables (CRITICAL SECURITY)
+.env
+/backend/.env
+/collabbase-landing/.env
+
+# Build outputs and OS files
+dist/
+build/
+.DS_Store
