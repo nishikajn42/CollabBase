@@ -76,11 +76,14 @@ router.post('/complete-profile', async (req, res) => {
 
 // PUT /api/auth/update-profile
 router.put('/update-profile', async (req, res) => {
-  const { userId, tagline, about, links, profilePicture, coverPhoto } = req.body;
+  // 1. Add githubUsername and givenFeedbacks to the destructured list
+  const { userId, tagline, about, links, profilePicture, coverPhoto, githubUsername, givenFeedbacks } = req.body;
+  
   try {
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { $set: { tagline, about, links, profilePicture, coverPhoto } },
+      // 2. Add them to the $set object
+      { $set: { tagline, about, links, profilePicture, coverPhoto, githubUsername, givenFeedbacks } },
       { new: true }
     );
     res.status(200).json({ message: "Profile updated", user: updatedUser });

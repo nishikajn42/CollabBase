@@ -14,6 +14,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/github', require('./routes/github'));
 
 // Health check route
 app.get('/', (req, res) => {

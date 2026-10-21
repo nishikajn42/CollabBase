@@ -29,7 +29,13 @@ const userSchema = new mongoose.Schema({
   // Bio & Links
   tagline: { type: String, default: "" }, 
   about: { type: String, default: "" },
-  links: [linkSchema], 
+  
+  // ADD THESE 3 LINES:
+  githubUsername: { type: String, default: "" },
+  givenFeedbacks: { type: Array, default: [] },
+  receivedFeedbacks: { type: Array, default: [] },
+  
+  links: [linkSchema],
   
   isProfileComplete: { type: Boolean, default: false }
 }, { timestamps: true });
