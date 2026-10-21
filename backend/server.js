@@ -5,23 +5,27 @@ require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 
+// 1. Create the app first
 const app = express();
 
-// Middleware
-app.use(cors());
+// 2. Apply Middleware (including your Vercel CORS whitelist)
+app.use(cors({
+  origin: ['http://localhost:5173', 'https://collab-base-sepia.vercel.app'],
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Routes
+// 3. Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/github', require('./routes/github'));
 
-// Health check route
+// 4. Health check route
 app.get('/', (req, res) => {
   res.send('CollabBase API is running...');
 });
 
-// Database connection
+// 5. Database connection
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ Successfully connected to MongoDB'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));

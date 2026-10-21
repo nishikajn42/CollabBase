@@ -95,6 +95,13 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
     const newUserData = { ...userData, ...updates };
     setUserData(newUserData); 
     setActiveModal(null);
+    
+    // NEW: Instantly update the browser cache so changes survive a refresh!
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+      localStorage.setItem('user', JSON.stringify({ ...storedUser, ...updates }));
+    } catch (e) { console.error("Cache update failed"); }
+
     try {
       await fetch(`${import.meta.env.VITE_API_URL}/api/auth/update-profile`, {
         method: 'PUT',
