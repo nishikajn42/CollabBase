@@ -282,7 +282,6 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
             <div className="py-12 text-center text-sm font-medium text-slate-400">Syncing with GitHub...</div>
           ) : githubData ? (
             <div className="space-y-8">
-              
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   {githubData.avatarUrl ? (
@@ -294,7 +293,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                     <h3 className="flex items-center gap-3 text-base font-bold text-white">
                       {githubData.name || githubData.username}
                       <span className="flex items-center gap-1 rounded-md border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-400 backdrop-blur-md">
-                        <Award size={12} /> {getCoderBadge(githubData.topLanguages)}
+                        <Award size={12} /> {githubData.publicRepos === 0 ? "Aspiring Developer" : getCoderBadge(githubData.topLanguages)}
                       </span>
                     </h3>
                     <p className="font-mono text-xs text-slate-400">@{githubData.username}</p>
@@ -303,53 +302,58 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                 <Sparkles size={20} className="text-blue-400 opacity-80" />
               </div>
 
-              {githubData.bio && (
-                <p className="text-sm leading-relaxed text-slate-300">{githubData.bio}</p>
+              {/* POSITIVE EMPTY STATE FOR NEW GITHUB USERS */}
+              {githubData.publicRepos === 0 ? (
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                  <div className="mb-3 rounded-full bg-blue-500/10 p-3">
+                    <Code2 size={24} className="text-blue-400" />
+                  </div>
+                  <h4 className="text-sm font-bold text-white">Building in Stealth</h4>
+                  <p className="mt-2 max-w-sm text-xs leading-relaxed text-slate-400">
+                    @{githubData.username} has connected their developer account and is gearing up for their first major projects. Watch this space!
+                  </p>
+                </div>
+              ) : (
+                /* Normal Stats Grid for Active Users */
+                <>
+                  {githubData.bio && <p className="text-sm leading-relaxed text-slate-300">{githubData.bio}</p>}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="flex flex-col items-start justify-center rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 shadow-inner">
+                      <FolderGit2 size={16} className="mb-3 text-blue-400" />
+                      <span className="text-2xl font-black tracking-tight text-white">{githubData.publicRepos}</span>
+                      <span className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Repositories</span>
+                    </div>
+                    <div className="flex flex-col items-start justify-center rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 shadow-inner">
+                      <Star size={16} className="mb-3 text-amber-400" />
+                      <span className="text-2xl font-black tracking-tight text-amber-400">{githubData.totalStars}</span>
+                      <span className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Stars</span>
+                    </div>
+                    <div className="flex flex-col items-start justify-center rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 shadow-inner">
+                      <Users size={16} className="mb-3 text-emerald-400" />
+                      <span className="text-2xl font-black tracking-tight text-emerald-400">{githubData.followers}</span>
+                      <span className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Followers</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-400">Language Distribution</p>
+                    <div className="space-y-4">
+                      {githubData.topLanguages?.map((lang, idx) => {
+                        const glowColors = ['bg-blue-500', 'bg-purple-500', 'bg-cyan-400', 'bg-emerald-500'];
+                        return (
+                          <div key={lang.name} className="flex items-center gap-4">
+                            <div className="w-24 text-xs font-semibold text-slate-200">{lang.name}</div>
+                            <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800/80">
+                              <div style={{ width: `${lang.percent}%` }} className={`absolute left-0 top-0 h-full rounded-full ${glowColors[idx % 4]}`} />
+                            </div>
+                            <div className="w-12 text-right font-mono text-xs font-bold text-slate-400">{lang.percent}%</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
               )}
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="flex flex-col items-start justify-center rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 shadow-inner">
-                  <FolderGit2 size={16} className="mb-3 text-blue-400" />
-                  <span className="text-2xl font-black tracking-tight text-white">{githubData.publicRepos}</span>
-                  <span className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Repositories</span>
-                </div>
-                <div className="flex flex-col items-start justify-center rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 shadow-inner">
-                  <Star size={16} className="mb-3 text-amber-400" />
-                  <span className="text-2xl font-black tracking-tight text-amber-400">{githubData.totalStars}</span>
-                  <span className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Stars</span>
-                </div>
-                <div className="flex flex-col items-start justify-center rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 shadow-inner">
-                  <Users size={16} className="mb-3 text-emerald-400" />
-                  <span className="text-2xl font-black tracking-tight text-emerald-400">{githubData.followers}</span>
-                  <span className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Followers</span>
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-400">Language Distribution</p>
-                <div className="space-y-4">
-                  {githubData.topLanguages?.map((lang, idx) => {
-                    const glowColors = [
-                      'bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.8)]',
-                      'bg-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.8)]',
-                      'bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.8)]',
-                      'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]'
-                    ];
-                    const colorClass = glowColors[idx % glowColors.length];
-
-                    return (
-                      <div key={lang.name} className="flex items-center gap-4">
-                        <div className="w-24 text-xs font-semibold text-slate-200">{lang.name}</div>
-                        <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800/80">
-                          <div style={{ width: `${lang.percent}%` }} className={`absolute left-0 top-0 h-full rounded-full ${colorClass}`} />
-                        </div>
-                        <div className="w-12 text-right font-mono text-xs font-bold text-slate-400">{lang.percent}%</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -470,7 +474,27 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
 
               <div className="p-4">
                 {activeModal === 'create-post' && (
-                  <textarea autoFocus placeholder="Share your thoughts, projects, or hackathon updates... Use #tags like #frontend or #ai" className="min-h-[150px] w-full resize-none bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white" />
+                  <div className="space-y-3">
+                    <textarea 
+                      autoFocus 
+                      placeholder="Share your thoughts, projects, or hackathon updates... Use #tags like #frontend or #ai" 
+                      className="min-h-[150px] w-full resize-none bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white" 
+                    />
+                    <div className="flex items-center gap-5 border-t border-slate-100 pt-3 text-slate-500 dark:border-slate-800">
+                      <label className="flex cursor-pointer items-center gap-1.5 text-xs font-semibold transition hover:text-blue-500">
+                        <ImageIcon size={16} /> Photo
+                        <input type="file" hidden accept="image/*" />
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-1.5 text-xs font-semibold transition hover:text-blue-500">
+                        <Video size={16} /> Video
+                        <input type="file" hidden accept="video/*" />
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-1.5 text-xs font-semibold transition hover:text-blue-500">
+                        <FileText size={16} /> Document
+                        <input type="file" hidden accept=".pdf,.doc,.docx" />
+                      </label>
+                    </div>
+                  </div>
                 )}
                 {activeModal === 'edit-profile' && (
                   <div className="space-y-4">
