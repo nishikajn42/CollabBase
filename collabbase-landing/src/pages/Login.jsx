@@ -40,7 +40,7 @@ const Login = ({ isDarkMode, onToggleTheme, onSignedIn }) => {
       }
 
       // 3. SEND DATA TO YOUR BACKEND
-      const backendResponse = await fetch('http://localhost:5000/api/auth/google-login', {
+      const backendResponse = await fetch('import.meta.env.VITE_API_URL/api/auth/google-login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

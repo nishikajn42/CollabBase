@@ -92,4 +92,21 @@ router.put('/update-profile', async (req, res) => {
   }
 });
 
+// GET /api/auth/user/:handle
+// Fetches a public profile by their unique username handle
+router.get('/user/:handle', async (req, res) => {
+  try {
+    const user = await User.findOne({ handle: req.params.handle });
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+    
+    res.status(200).json(user);
+  } catch (error) {
+    console.error("Profile Fetch Error:", error);
+    res.status(500).json({ error: "Failed to fetch user profile." });
+  }
+});
+
 module.exports = router;

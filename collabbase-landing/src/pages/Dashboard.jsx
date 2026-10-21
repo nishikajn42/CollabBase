@@ -5,20 +5,9 @@ import {
   GraduationCap, Send, Plus, Sparkles, MessageCircle,
   Youtube, Globe, Camera, Image as ImageIcon, Video, FileText, 
   X, MessageSquareQuote, Search, Hash, AtSign, Code2, Star,
-  FolderGit2, Users, Award 
+  FolderGit2, Users, Award
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
-
-// ==========================================
-// HELPER: GITHUB DYNAMIC BADGE
-// ==========================================
-const getCoderBadge = (langs) => {
-  if (!langs || langs.length === 0) return "Explorer";
-  const topLang = langs[0].name.toLowerCase();
-  if (['javascript', 'typescript', 'html', 'css', 'react', 'vue'].includes(topLang)) return "Frontend Specialist";
-  if (['python', 'java', 'c++', 'go', 'rust', 'c'].includes(topLang)) return "Backend Developer";
-  return "Open Source Contributor";
-};
+import { Link, useLocation } from 'react-router-dom';
 
 // ==========================================
 // HELPER: DYNAMIC LINK ICON DETECTOR
@@ -33,50 +22,65 @@ const getLinkIcon = (url) => {
 };
 
 // ==========================================
+// HELPER: GITHUB DYNAMIC BADGE
+// ==========================================
+const getCoderBadge = (langs) => {
+  if (!langs || langs.length === 0) return "Explorer";
+  const topLang = langs[0].name.toLowerCase();
+  if (['javascript', 'typescript', 'html', 'css', 'react', 'vue'].includes(topLang)) return "Frontend Specialist";
+  if (['python', 'java', 'c++', 'go', 'rust', 'c'].includes(topLang)) return "Backend Developer";
+  return "Open Source Contributor";
+};
+
+// ==========================================
 // 1. LINKEDIN-STYLE PROFILE COMPONENT
 // ==========================================
-function Profile({ currentUser, isOwnProfile = true }) {
-  const [userData, setUserData] = useState(currentUser);
+function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
+  const [userData, setUserData] = useState(isOwnProfile ? currentUser : null);
+  const [isLoadingUser, setIsLoadingUser] = useState(!isOwnProfile);
   const [activeModal, setActiveModal] = useState(null);
   
-  // GitHub Live Stats State
   const [githubData, setGithubData] = useState(null);
   const [ghLoading, setGhLoading] = useState(false);
 
-  // Form State for Modals
   const [editForm, setEditForm] = useState({
-    tagline: userData?.tagline || '',
-    about: userData?.about || '',
-    newLinkTitle: '',
-    newLinkUrl: '',
-    feedbackUser: '',
-    feedbackText: '',
-    githubUsername: userData?.githubUsername || '' // Added for GitHub integration
+    tagline: '', about: '', newLinkTitle: '', newLinkUrl: '', feedbackUser: '', feedbackText: '', githubUsername: ''
   });
 
-  const rawName = userData?.fullName || 'Display Name';
-  const enrollmentNo = userData?.enrollmentNo || 'Campus Student';
-  const cleanName = rawName.replace(enrollmentNo, '').trim(); 
-  
-  const handle = userData?.handle || userData?.githubUsername || 'username'; 
-  const branch = userData?.branch || 'Branch Name';
-  const tagline = userData?.tagline || `Student at MITS Gwalior | ${branch}`;
-  const about = userData?.about || "Write something about yourself, your skills, and what you are building...";
-  const initials = cleanName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  // Fetch Public Profile Data if looking at someone else
+  useEffect(() => {
+    if (!isOwnProfile && profileHandle) {
+      setIsLoadingUser(true);
+      fetch(`import.meta.env.VITE_API_URL/api/auth/user/${profileHandle}`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.error) setUserData(data);
+          setIsLoadingUser(false);
+        })
+        .catch(() => setIsLoadingUser(false));
+    } else {
+      setUserData(currentUser);
+      setIsLoadingUser(false);
+    }
+  }, [profileHandle, isOwnProfile, currentUser]);
 
-  const dbLinks = userData?.links || [];
-  const givenFeedbacks = userData?.givenFeedbacks || [];
-  const receivedFeedbacks = userData?.receivedFeedbacks || [];
-
-  const allLinks = userData?.githubUsername 
-    ? [{ _id: 'gh-auto', title: 'GitHub Profile', url: `https://github.com/${userData.githubUsername}` }, ...dbLinks]
-    : dbLinks;
+  // Sync edit form when userData loads
+  useEffect(() => {
+    if (userData) {
+      setEditForm(prev => ({
+        ...prev,
+        tagline: userData.tagline || '',
+        about: userData.about || '',
+        githubUsername: userData.githubUsername || ''
+      }));
+    }
+  }, [userData]);
 
   // Fetch Live GitHub Analysis
   useEffect(() => {
     if (userData?.githubUsername) {
       setGhLoading(true);
-      fetch(`http://localhost:5000/api/github/analyze/${userData.githubUsername}`)
+      fetch(`import.meta.env.VITE_API_URL/api/github/analyze/${userData.githubUsername}`)
         .then(res => res.json())
         .then(data => {
           if (!data.error) setGithubData(data);
@@ -87,23 +91,21 @@ function Profile({ currentUser, isOwnProfile = true }) {
   }, [userData?.githubUsername]);
 
   const handleSaveProfile = async (updates) => {
+    if (!isOwnProfile) return;
     const newUserData = { ...userData, ...updates };
     setUserData(newUserData); 
     setActiveModal(null);
-
     try {
-      await fetch('http://localhost:5000/api/auth/update-profile', {
+      await fetch('import.meta.env.VITE_API_URL/api/auth/update-profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: userData._id, ...updates })
       });
-    } catch (error) {
-      console.error('Failed to save to database', error);
-    }
+    } catch (error) { console.error('Failed to save to database', error); }
   };
 
   const handleDeleteLink = (linkToDelete) => {
-    const newLinks = dbLinks.filter(l => l.url !== linkToDelete.url);
+    const newLinks = userData.links.filter(l => l.url !== linkToDelete.url);
     handleSaveProfile({ links: newLinks });
   };
 
@@ -115,7 +117,7 @@ function Profile({ currentUser, isOwnProfile = true }) {
       text: editForm.feedbackText,
       date: new Date().toLocaleDateString()
     };
-    const updatedGiven = [newFeedback, ...givenFeedbacks];
+    const updatedGiven = [newFeedback, ...(userData?.givenFeedbacks || [])];
     handleSaveProfile({ givenFeedbacks: updatedGiven });
     setEditForm({ ...editForm, feedbackUser: '', feedbackText: '' });
   };
@@ -131,6 +133,33 @@ function Profile({ currentUser, isOwnProfile = true }) {
       reader.readAsDataURL(file);
     }
   };
+
+  // Show loading screen if fetching another user
+  if (isLoadingUser || !userData) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center space-y-4">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600 dark:border-slate-800 dark:border-t-blue-500"></div>
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Loading profile @{profileHandle}...</p>
+      </div>
+    );
+  }
+
+  const rawName = userData.fullName || 'Display Name';
+  const enrollmentNo = userData.enrollmentNo || 'Campus Student';
+  const cleanName = rawName.replace(enrollmentNo, '').trim(); 
+  const handle = userData.handle || userData.githubUsername || 'username'; 
+  const branch = userData.branch || 'Branch Name';
+  const tagline = userData.tagline || `Student at MITS Gwalior | ${branch}`;
+  const about = userData.about || "Write something about yourself, your skills, and what you are building...";
+  const initials = cleanName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+  const dbLinks = userData.links || [];
+  const givenFeedbacks = userData.givenFeedbacks || [];
+  const receivedFeedbacks = userData.receivedFeedbacks || [];
+
+  const allLinks = userData.githubUsername 
+    ? [{ _id: 'gh-auto', title: 'GitHub Profile', url: `https://github.com/${userData.githubUsername}` }, ...dbLinks]
+    : dbLinks;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-12">
@@ -153,9 +182,8 @@ function Profile({ currentUser, isOwnProfile = true }) {
           <div className="group absolute -top-16 left-6 flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-blue-600 text-3xl font-bold text-white shadow-md dark:border-[#0b1120] sm:-top-20 sm:left-8 sm:h-36 sm:w-36 sm:text-5xl">
             {userData.profilePicture ? (
               <img src={userData.profilePicture} alt={cleanName} className="h-full w-full object-cover" />
-            ) : (
-              initials
-            )}
+            ) : initials}
+            
             {isOwnProfile && (
               <label className="absolute bottom-2 right-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-slate-100 text-slate-700 shadow-sm hover:bg-slate-200 dark:border-[#0b1120] dark:bg-slate-800 dark:text-slate-300">
                 <Camera size={14} />
@@ -166,7 +194,7 @@ function Profile({ currentUser, isOwnProfile = true }) {
 
           {isOwnProfile && (
             <button 
-              onClick={() => { setEditForm({ ...editForm, tagline: userData.tagline, githubUsername: userData.githubUsername }); setActiveModal('edit-profile'); }}
+              onClick={() => setActiveModal('edit-profile')}
               className="absolute right-6 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
             >
               <Edit3 size={16} />
@@ -179,9 +207,9 @@ function Profile({ currentUser, isOwnProfile = true }) {
               <div className="flex items-center gap-2 mt-0.5">
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{enrollmentNo}</p>
                 <span className="text-slate-300 dark:text-slate-600">•</span>
-                <Link to={`/profile/${handle}`} className="font-mono text-xs font-semibold text-blue-600 transition hover:underline dark:text-blue-400">
+                <span className="font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
                   @{handle}
-                </Link>
+                </span>
               </div>
               <p className="mt-2 max-w-lg text-sm font-medium text-slate-800 dark:text-slate-200">{tagline}</p>
             </div>
@@ -240,9 +268,7 @@ function Profile({ currentUser, isOwnProfile = true }) {
 
       {/* ----------------- DYNAMIC GITHUB AI ANALYSIS BOX ----------------- */}
       <div className="relative overflow-hidden rounded-2xl bg-[#0b1120] p-[1px] shadow-2xl">
-        {/* Animated Gradient Border Effect */}
         <div className="absolute inset-0 bg-gradient-to-br from-blue-500/40 via-purple-500/10 to-emerald-500/40 opacity-50"></div>
-        
         <div className="relative rounded-2xl bg-slate-900/90 p-6 backdrop-blur-2xl sm:p-8">
           
           {ghLoading ? (
@@ -250,7 +276,6 @@ function Profile({ currentUser, isOwnProfile = true }) {
           ) : githubData ? (
             <div className="space-y-8">
               
-              {/* HEADER: Profile & Badge */}
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   {githubData.avatarUrl ? (
@@ -275,7 +300,6 @@ function Profile({ currentUser, isOwnProfile = true }) {
                 <p className="text-sm leading-relaxed text-slate-300">{githubData.bio}</p>
               )}
 
-              {/* METRICS: Left-Aligned Glassmorphism Cards */}
               <div className="grid grid-cols-3 gap-4">
                 <div className="flex flex-col items-start justify-center rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 shadow-inner">
                   <FolderGit2 size={16} className="mb-3 text-blue-400" />
@@ -294,12 +318,10 @@ function Profile({ currentUser, isOwnProfile = true }) {
                 </div>
               </div>
 
-              {/* LANGUAGES: Vertical Breakdown with Glowing Bars */}
               <div>
                 <p className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-400">Language Distribution</p>
                 <div className="space-y-4">
                   {githubData.topLanguages?.map((lang, idx) => {
-                    // Assign distinct glowing colors to the top 4 languages
                     const glowColors = [
                       'bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.8)]',
                       'bg-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.8)]',
@@ -312,10 +334,7 @@ function Profile({ currentUser, isOwnProfile = true }) {
                       <div key={lang.name} className="flex items-center gap-4">
                         <div className="w-24 text-xs font-semibold text-slate-200">{lang.name}</div>
                         <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800/80">
-                          <div 
-                            style={{ width: `${lang.percent}%` }} 
-                            className={`absolute left-0 top-0 h-full rounded-full ${colorClass}`} 
-                          />
+                          <div style={{ width: `${lang.percent}%` }} className={`absolute left-0 top-0 h-full rounded-full ${colorClass}`} />
                         </div>
                         <div className="w-12 text-right font-mono text-xs font-bold text-slate-400">{lang.percent}%</div>
                       </div>
@@ -330,24 +349,21 @@ function Profile({ currentUser, isOwnProfile = true }) {
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-800 border border-slate-700 shadow-inner">
                 <Github size={28} className="text-slate-400" />
               </div>
-              <h3 className="mb-2 text-lg font-bold text-white">Connect GitHub</h3>
+              <h3 className="mb-2 text-lg font-bold text-white">{isOwnProfile ? 'Connect GitHub' : 'GitHub Not Linked'}</h3>
               <p className="mb-6 max-w-sm text-sm leading-relaxed text-slate-400">
-                Link your account to unlock real-time analysis, contribution signals, and dynamic platform badges.
+                {isOwnProfile ? 'Link your account to unlock real-time analysis, contribution signals, and dynamic platform badges.' : `${cleanName} hasn't linked their GitHub account yet.`}
               </p>
-              <button 
-                onClick={() => { setEditForm({ ...editForm, tagline: userData.tagline, githubUsername: userData.githubUsername || '' }); setActiveModal('edit-profile'); }} 
-                className="rounded-xl bg-white px-6 py-2.5 text-sm font-bold text-slate-900 shadow-lg transition hover:bg-slate-200"
-              >
-                Link Account Now
-              </button>
+              {isOwnProfile && (
+                <button onClick={() => setActiveModal('edit-profile')} className="rounded-xl bg-white px-6 py-2.5 text-sm font-bold text-slate-900 shadow-lg transition hover:bg-slate-200">
+                  Link Account Now
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
 
       {/* ----------------- 3-TIER TEXT SECTIONS ----------------- */}
-      
-      {/* Box 1: Feedback Received */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1120] sm:p-8">
         <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
           <MessageSquareQuote size={18} className="text-blue-500" /> Feedback Received
@@ -366,10 +382,9 @@ function Profile({ currentUser, isOwnProfile = true }) {
         )}
       </div>
 
-      {/* Box 2: About */}
       <div className="relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1120] sm:p-8">
         {isOwnProfile && (
-          <button onClick={() => { setEditForm({ ...editForm, about }); setActiveModal('edit-about'); }} className="absolute right-6 top-6 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <button onClick={() => setActiveModal('edit-about')} className="absolute right-6 top-6 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
             <Edit3 size={18} />
           </button>
         )}
@@ -377,24 +392,19 @@ function Profile({ currentUser, isOwnProfile = true }) {
         <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-400">{about}</p>
       </div>
 
-      {/* Box 3: Feedback Given */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1120] sm:p-8">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
             <MessageSquareQuote size={18} className="text-indigo-500" /> Feedback Given
           </h2>
           {isOwnProfile && (
-            <button 
-              onClick={() => setActiveModal('write-feedback')} 
-              className="flex items-center gap-1.5 rounded-lg text-sm font-semibold text-blue-600 transition hover:text-blue-700 dark:text-blue-400"
-            >
+            <button onClick={() => setActiveModal('write-feedback')} className="flex items-center gap-1.5 rounded-lg text-sm font-semibold text-blue-600 transition hover:text-blue-700 dark:text-blue-400">
               <Plus size={16} /> Write feedback
             </button>
           )}
         </div>
-
         {givenFeedbacks.length === 0 ? (
-          <p className="text-sm italic text-slate-500">You haven't written feedback for anyone yet. Tag a teammate with @username to vouch for them.</p>
+          <p className="text-sm italic text-slate-500">{isOwnProfile ? "You haven't written feedback for anyone yet." : `${cleanName} hasn't given feedback to anyone yet.`}</p>
         ) : (
           <div className="space-y-3">
             {givenFeedbacks.map((fb) => (
@@ -412,7 +422,6 @@ function Profile({ currentUser, isOwnProfile = true }) {
         )}
       </div>
 
-      {/* ----------------- POSTS & ACTIVITY ----------------- */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1120] sm:p-8">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">Activity</h2>
@@ -433,7 +442,7 @@ function Profile({ currentUser, isOwnProfile = true }) {
 
       {/* ----------------- MODALS ----------------- */}
       <AnimatePresence>
-        {activeModal && (
+        {activeModal && isOwnProfile && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
               
@@ -461,89 +470,39 @@ function Profile({ currentUser, isOwnProfile = true }) {
                     <p className="text-xs text-slate-500">Name and Enrollment can only be changed by contacting support.</p>
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Tagline</label>
-                      <input 
-                        type="text" 
-                        placeholder="Tagline (e.g. Student at MITS | CSE)" 
-                        value={editForm.tagline} 
-                        onChange={(e) => setEditForm({ ...editForm, tagline: e.target.value })}
-                        className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" 
-                      />
+                      <input type="text" placeholder="Tagline" value={editForm.tagline} onChange={(e) => setEditForm({ ...editForm, tagline: e.target.value })} className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">GitHub Username</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. torvalds" 
-                        value={editForm.githubUsername} 
-                        onChange={(e) => setEditForm({ ...editForm, githubUsername: e.target.value })}
-                        className="w-full rounded-xl border border-slate-200 p-3 text-sm font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" 
-                      />
+                      <input type="text" placeholder="e.g. nishikajn42" value={editForm.githubUsername} onChange={(e) => setEditForm({ ...editForm, githubUsername: e.target.value })} className="w-full rounded-xl border border-slate-200 p-3 text-sm font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                     </div>
                   </div>
                 )}
                 {activeModal === 'edit-about' && (
-                  <textarea 
-                    autoFocus 
-                    placeholder="Write about yourself..." 
-                    value={editForm.about}
-                    onChange={(e) => setEditForm({ ...editForm, about: e.target.value })}
-                    className="min-h-[150px] w-full resize-none rounded-xl border border-slate-200 p-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" 
-                  />
+                  <textarea autoFocus placeholder="Write about yourself..." value={editForm.about} onChange={(e) => setEditForm({ ...editForm, about: e.target.value })} className="min-h-[150px] w-full resize-none rounded-xl border border-slate-200 p-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 )}
                 {activeModal === 'add-link' && (
                   <div className="space-y-4">
-                    <input 
-                      type="text" 
-                      placeholder="Link Title (e.g., YouTube)" 
-                      value={editForm.newLinkTitle}
-                      onChange={(e) => setEditForm({ ...editForm, newLinkTitle: e.target.value })}
-                      className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" 
-                    />
-                    <input 
-                      type="url" 
-                      placeholder="URL (e.g., https://youtube.com/...)" 
-                      value={editForm.newLinkUrl}
-                      onChange={(e) => setEditForm({ ...editForm, newLinkUrl: e.target.value })}
-                      className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" 
-                    />
+                    <input type="text" placeholder="Link Title (e.g., YouTube)" value={editForm.newLinkTitle} onChange={(e) => setEditForm({ ...editForm, newLinkTitle: e.target.value })} className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                    <input type="url" placeholder="URL (e.g., https://youtube.com/...)" value={editForm.newLinkUrl} onChange={(e) => setEditForm({ ...editForm, newLinkUrl: e.target.value })} className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                   </div>
                 )}
                 {activeModal === 'write-feedback' && (
                   <div className="space-y-4">
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Teammate @username</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. torvalds" 
-                        value={editForm.feedbackUser}
-                        onChange={(e) => setEditForm({ ...editForm, feedbackUser: e.target.value })}
-                        className="w-full rounded-xl border border-slate-200 p-3 text-sm font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" 
-                      />
+                      <input type="text" placeholder="e.g. nishikajn42" value={editForm.feedbackUser} onChange={(e) => setEditForm({ ...editForm, feedbackUser: e.target.value })} className="w-full rounded-xl border border-slate-200 p-3 text-sm font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Feedback / Vouch</label>
-                      <textarea 
-                        rows={4}
-                        placeholder="Write your experience working together on a project or hackathon..." 
-                        value={editForm.feedbackText}
-                        onChange={(e) => setEditForm({ ...editForm, feedbackText: e.target.value })}
-                        className="w-full resize-none rounded-xl border border-slate-200 p-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" 
-                      />
+                      <textarea rows={4} placeholder="Write your experience working together..." value={editForm.feedbackText} onChange={(e) => setEditForm({ ...editForm, feedbackText: e.target.value })} className="w-full resize-none rounded-xl border border-slate-200 p-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                     </div>
                   </div>
                 )}
               </div>
 
               <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50">
-                <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
-                  {activeModal === 'create-post' && (
-                    <>
-                      <label className="cursor-pointer rounded-full p-2 hover:bg-slate-200 dark:hover:bg-slate-800"><ImageIcon size={20} /><input type="file" className="hidden" accept="image/*" /></label>
-                      <label className="cursor-pointer rounded-full p-2 hover:bg-slate-200 dark:hover:bg-slate-800"><Video size={20} /><input type="file" className="hidden" accept="video/*" /></label>
-                      <label className="cursor-pointer rounded-full p-2 hover:bg-slate-200 dark:hover:bg-slate-800"><FileText size={20} /><input type="file" className="hidden" accept=".pdf,.doc,.txt" /></label>
-                    </>
-                  )}
-                </div>
+                <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400"></div>
                 <button 
                   onClick={() => {
                     if (activeModal === 'edit-profile') handleSaveProfile({ tagline: editForm.tagline, githubUsername: editForm.githubUsername });
@@ -553,9 +512,7 @@ function Profile({ currentUser, isOwnProfile = true }) {
                       handleSaveProfile({ links: [...dbLinks, newLink] });
                       setEditForm({ ...editForm, newLinkTitle: '', newLinkUrl: '' });
                     }
-                    if (activeModal === 'write-feedback') {
-                      handleSaveGivenFeedback();
-                    }
+                    if (activeModal === 'write-feedback') handleSaveGivenFeedback();
                     if (activeModal === 'create-post') setActiveModal(null);
                   }}
                   className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
@@ -577,54 +534,31 @@ function Profile({ currentUser, isOwnProfile = true }) {
 function Home({ currentUser }) {
   const [draft, setDraft] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // CLEARED: Starting with a completely empty array of posts
   const [posts, setPosts] = useState([]); 
 
-  // Filter posts based on hashtag search
   const filteredPosts = searchQuery.startsWith('#')
     ? posts.filter(p => p.text.toLowerCase().includes(searchQuery.toLowerCase()))
     : posts;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-12">
-      
-      {/* 🔍 SEARCH BAR COMPONENT */}
       <div className="relative rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1120]">
         <div className="flex items-center gap-3">
           <Search size={18} className="ml-2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search users by @username or posts by #tag (e.g. #frontend)..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="mr-2 text-xs font-bold text-slate-400 hover:text-slate-600">
-              Clear
-            </button>
-          )}
+          <input type="text" placeholder="Search users by @username or posts by #tag..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white" />
+          {searchQuery && <button onClick={() => setSearchQuery('')} className="mr-2 text-xs font-bold text-slate-400 hover:text-slate-600">Clear</button>}
         </div>
-
-        {/* Dropdown for User Handles */}
         {searchQuery.startsWith('@') && searchQuery.length > 1 && (
           <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-800 dark:bg-slate-900">
             <p className="text-[11px] text-slate-400 mb-2">User Search Result:</p>
-            <Link 
-              to={`/profile/${searchQuery.replace('@', '')}`} 
-              className="flex items-center gap-2 rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800"
-            >
+            <Link to={`/profile/${searchQuery.replace('@', '')}`} className="flex items-center gap-2 rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800">
               <AtSign size={16} className="text-blue-500" />
-              <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
-                View profile for {searchQuery}
-              </span>
+              <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">View profile for {searchQuery}</span>
             </Link>
           </div>
         )}
       </div>
 
-      {/* Composer */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1120]">
         <div className="mb-3 flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-blue-600 text-xs font-bold text-white">
@@ -633,33 +567,23 @@ function Home({ currentUser }) {
           <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Post a Hackathon Idea</p>
         </div>
         <form onSubmit={(e) => { e.preventDefault(); setPosts([{ id: Date.now(), text: draft, author: currentUser?.fullName || 'User', handle: currentUser?.handle || 'me', time: 'Just now' }, ...posts]); setDraft(''); }}>
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="What are you building? Add tags like #frontend or #ai"
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:focus:border-blue-500"
-          />
+          <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="What are you building? Add tags like #frontend or #ai" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:focus:border-blue-500" />
           <div className="mt-3 flex justify-between items-center">
             <div className="flex items-center gap-2 text-slate-400">
               <label className="cursor-pointer hover:text-blue-500"><ImageIcon size={18}/><input type="file" hidden accept="image/*"/></label>
             </div>
-            <button type="submit" disabled={!draft.trim()} className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50">
-              <Send size={14} /> Post
-            </button>
+            <button type="submit" disabled={!draft.trim()} className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"><Send size={14} /> Post</button>
           </div>
         </form>
       </div>
 
-      {/* Post List */}
       <div className="space-y-4">
         {filteredPosts.map((post) => (
           <motion.div key={post.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1120]">
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold text-slate-900 dark:text-white">
                 {post.author} 
-                <Link to={`/profile/${post.handle}`} className="font-mono text-blue-500 font-normal hover:underline ml-1">
-                  @{post.handle}
-                </Link>
+                <Link to={`/profile/${post.handle}`} className="font-mono text-blue-500 font-normal hover:underline ml-1">@{post.handle}</Link>
               </p>
               <span className="text-[10px] text-slate-400">{post.time}</span>
             </div>
@@ -691,10 +615,21 @@ function Messages() {
 // 4. MAIN EXPORT ROUTER
 // ==========================================
 export default function Dashboard({ activeTab, user }) { 
-  const currentUser = user || {}; 
-
-  if (activeTab === 'messages') return <Messages currentUser={currentUser} />; 
-  if (activeTab === 'profile') return <Profile currentUser={currentUser} isOwnProfile={true} />; 
+  const location = useLocation();
   
-  return <Home currentUser={currentUser} />; 
+  // Check if the URL is trying to view a public profile
+  const isProfileRoute = location.pathname.startsWith('/profile/');
+  const profileHandle = isProfileRoute ? location.pathname.split('/')[2] : null;
+
+  // Determine if this is YOUR profile or SOMEONE ELSE's
+  const isOwnProfile = !profileHandle || profileHandle === user?.handle;
+
+  if (activeTab === 'messages' && !isProfileRoute) return <Messages currentUser={user} />; 
+  
+  // Render Profile tab if clicked in navigation OR if URL matches a handle
+  if (activeTab === 'profile' || isProfileRoute) {
+    return <Profile currentUser={user} isOwnProfile={isOwnProfile} profileHandle={profileHandle} />; 
+  }
+  
+  return <Home currentUser={user} />; 
 }
