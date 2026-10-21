@@ -96,7 +96,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
     setUserData(newUserData); 
     setActiveModal(null);
     try {
-      await fetch('${import.meta.env.VITE_API_URL}/api/auth/update-profile', {
+      await fetch(`${import.meta.env.VITE_API_URL}/api/auth/update-profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: userData._id, ...updates })
