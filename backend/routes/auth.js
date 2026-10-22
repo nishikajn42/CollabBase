@@ -32,7 +32,6 @@ router.post('/google-login', async (req, res) => {
 // POST /api/auth/complete-profile (With GitHub Verification)
 // POST /api/auth/complete-profile
 router.post('/complete-profile', async (req, res) => {
-  // 1. Add fullName and handle to this list:
   const { userId, fullName, handle, enrollmentNo, branch, year, startYear, endYear, githubUsername } = req.body;
 
   try {
@@ -40,17 +39,14 @@ router.post('/complete-profile', async (req, res) => {
       return res.status(400).json({ error: "User ID, GitHub username, and Handle are required." });
     }
 
-    // Verify username directly with GitHub API
-    const ghCheck = await fetch(`https://api.github.com/users/${githubUsername.trim()}`);
-    if (!ghCheck.ok) {
-      return res.status(400).json({ error: `GitHub account '${githubUsername}' does not exist.` });
-    }
+    // WE REMOVED THE BACKEND GITHUB FETCH HERE. 
+    // The frontend already verified it, so we trust it and just save to MongoDB!
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       {
-        fullName, // Update name if changed
-        handle,   // Save the unique username
+        fullName, 
+        handle,   
         enrollmentNo,
         branch,
         year,

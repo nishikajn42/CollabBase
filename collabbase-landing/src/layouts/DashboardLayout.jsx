@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Home, MessageSquare, User as UserIcon, Sun, Moon, Search, LogOut, ChevronDown } from 'lucide-react';
+import { Home, MessageSquare, User as UserIcon, Sun, Moon, LogOut, ChevronDown } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import Footer from '../components/Footer';
 
-const DashboardLayout = ({ user, isDarkMode, onToggleTheme, activeTab, setActiveTab, onBackToLanding, children }) => {
+const DashboardLayout = ({ isDarkMode, onToggleTheme, activeTab, setActiveTab, children }) => {
+  const { currentUser, signOut } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [greeting, setGreeting] = useState('Good evening');
 
@@ -14,8 +16,9 @@ const DashboardLayout = ({ user, isDarkMode, onToggleTheme, activeTab, setActive
     else setGreeting('Good night');
   }, []);
 
-  const fullName = user?.fullName || 'Nishika Jain';
-  const initials = fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  const fullName = currentUser?.fullName || currentUser?.name || 'User Name';
+  const cleanName = fullName.replace(currentUser?.enrollmentNo || '', '').trim();
+  const initials = cleanName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f4f7f9] font-sans text-slate-900 transition-colors duration-300 dark:bg-[#060a14] dark:text-slate-100">
@@ -57,15 +60,21 @@ const DashboardLayout = ({ user, isDarkMode, onToggleTheme, activeTab, setActive
             
             <div className="relative">
               <button onClick={() => setShowProfileMenu(!showProfileMenu)} className="flex items-center gap-2 rounded-full p-0.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
-                  {initials}
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white overflow-hidden">
+                  {currentUser?.profilePicture ? <img src={currentUser.profilePicture} className="h-full w-full object-cover" /> : initials}
                 </div>
                 <ChevronDown size={14} className="text-slate-400" />
               </button>
 
               {showProfileMenu && (
-                <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
-                  <button onClick={onBackToLanding} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10">
+                <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900 z-50">
+                  <button 
+                    onClick={async () => {
+                      await signOut();
+                      window.location.href = '/';
+                    }} 
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                  >
                     <LogOut size={14} /> Sign Out
                   </button>
                 </div>
@@ -76,15 +85,15 @@ const DashboardLayout = ({ user, isDarkMode, onToggleTheme, activeTab, setActive
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
-        {/* SDMS Style Greeting Banner (Only on Feed) */}
+        {/* Greeting Banner (Only on Feed/Home tab) */}
         {activeTab === 'home' && (
           <div className="mb-6 overflow-hidden rounded-[20px] bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white shadow-lg sm:p-8">
             <div className="mb-2 flex items-center gap-3">
               <span className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-bold tracking-wider backdrop-blur-md">STUDENT PORTAL</span>
-              <span className="rounded-full bg-black/20 px-3 py-1 text-[10px] font-bold tracking-wider backdrop-blur-md">{user?.enrollmentNo || 'BTIR25O1033'}</span>
+              <span className="rounded-full bg-black/20 px-3 py-1 text-[10px] font-bold tracking-wider backdrop-blur-md">{currentUser?.enrollmentNo || 'BTIR25O1033'}</span>
             </div>
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              {greeting}, {fullName.toUpperCase()}! 👋
+              {greeting}, {cleanName.toUpperCase()}! 👋
             </h1>
             <p className="mt-2 text-sm text-blue-100">Find hackathon teammates, post projects, and build your verified portfolio.</p>
           </div>

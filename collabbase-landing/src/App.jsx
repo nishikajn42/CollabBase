@@ -9,7 +9,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 
 // Wrapper component to handle routing logic smoothly
 function AppRoutes() {
-  const { isAuthenticated, isLoading, currentUser: authUser } = useAuth();
+  const { isAuthenticated, isLoading, currentUser: authUser, signIn } = useAuth();
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
   const [isDarkMode, setIsDarkMode] = useState(() => window.localStorage.getItem('theme') === 'dark');
@@ -36,12 +36,12 @@ function AppRoutes() {
   }, [isDarkMode]);
 
   const handleSignedIn = (page, userData) => {
-    setCurrentUser(userData);
+    signIn(userData); // <-- Ye context aur LocalStorage dono me data save karega
     navigate('/' + page);
   };
 
   const handleOnboardingComplete = (updatedUser) => {
-    setCurrentUser(updatedUser);
+    signIn(updatedUser); // <-- Ye ensure karega ki refresh karne par data na ude
     navigate('/dashboard');
   };
 

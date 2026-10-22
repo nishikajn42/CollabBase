@@ -1,24 +1,50 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { demoAuthService } from '../services/demoAuthService';
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children, service = demoAuthService }) {
+export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    service.getCurrentUser().then(setCurrentUser).finally(() => setIsLoading(false));
-  }, [service]);
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      try {
+        setCurrentUser(JSON.parse(savedUser));
+      } catch (error) {
+        console.error("Error reading user data", error);
+      }
+    }
+    setIsLoading(false);
+  }, []);
 
   const value = useMemo(() => ({
     currentUser,
     isLoading,
     isAuthenticated: Boolean(currentUser),
-    signIn: async (credentials) => { const user = await service.signIn(credentials); setCurrentUser(user); return user; },
-    signOut: async () => { await service.signOut(); setCurrentUser(null); },
-    switchProfile: async (userId) => { const user = await service.switchProfile(userId); setCurrentUser(user); return user; },
-  }), [currentUser, isLoading, service]);
+    
+    signIn: (userData) => { 
+      localStorage.setItem('user', JSON.stringify(userData));
+      if (userData.token) localStorage.setItem('token', userData.token);
+      setCurrentUser(userData); 
+      return userData; 
+    },
+    
+    // NEW: Function to instantly update profile photo & data across the app
+    updateUser: (updates) => {
+      setCurrentUser(prev => {
+        const updatedUser = { ...prev, ...updates };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        return updatedUser;
+      });
+    },
+    
+    signOut: () => { 
+      localStorage.removeItem('user');
+      localStorage.removeItem('token'); 
+      setCurrentUser(null); 
+    }
+  }), [currentUser, isLoading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
