@@ -8,7 +8,7 @@ const authRoutes = require('./routes/auth');
 // 1. Create the app first
 const app = express();
 
-// 2. Apply Middleware (including your Vercel CORS whitelist)
+// 2. Apply Middleware
 app.use(cors({
   origin: ['http://localhost:5173', 'https://collab-base-sepia.vercel.app'],
   credentials: true
@@ -19,6 +19,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // 3. Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/github', require('./routes/github'));
+app.use('/api/posts', require('./routes/posts')); // YAHAN NAYA POST ROUTE ADD KIYA
 
 // 4. Health check route
 app.get('/', (req, res) => {

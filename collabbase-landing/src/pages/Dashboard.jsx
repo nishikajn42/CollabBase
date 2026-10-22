@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Edit3, Github, Linkedin, ExternalLink, Activity, 
-  GraduationCap, Send, Plus, Sparkles, MessageCircle,
-  Youtube, Globe, Camera, Image as ImageIcon, Video, FileText, 
-  X, MessageSquareQuote, Search, Hash, AtSign, Award, BrainCircuit, Bookmark, CheckCircle2, AlertCircle, Filter, Cpu, Download, ThumbsUp, MessageSquare, Share2
+  Send, Plus, Sparkles, MessageCircle, CalendarClock,
+  Youtube, Globe, Camera, Image as ImageIcon,
+  X, MessageSquareQuote, Search, BrainCircuit, Bookmark, AlertCircle, Cpu, ThumbsUp, MessageSquare, Share2, MoreVertical, Trash2, ArrowLeft
 } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; // Added to sync profile data
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext'; 
 
 // --- HELPERS ---
 const formatUrl = (url) => {
@@ -27,75 +27,148 @@ const getLinkIcon = (url) => {
 
 const getCoderBadge = (langs) => langs?.length > 0 ? `${langs[0].name} Developer` : "Developer";
 
-const simulateAITagGeneration = (text) => {
-  const lowerText = text.toLowerCase();
-  const tags = new Set();
-  if (lowerText.includes('react') || lowerText.includes('frontend')) tags.add('#react');
-  if (lowerText.includes('node') || lowerText.includes('backend')) tags.add('#backend');
-  if (lowerText.includes('ml') || lowerText.includes('ai')) tags.add('#machinelearning');
-  if (tags.size === 0) tags.add('#project');
-  return Array.from(tags).join(' ');
+// FULLY DYNAMIC AI TAGGER
+const simulateAITagGeneration = (text, existingTags = []) => {
+  const words = (text || "").toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/);
+  let potentialTags = [];
+  
+  const keywordMap = {
+    react: 'ReactJS', frontend: 'Frontend', backend: 'Backend', node: 'NodeJS',
+    api: 'API', ml: 'MachineLearning', ai: 'ArtificialIntelligence', data: 'DataScience',
+    python: 'Python', hackathon: 'Hackathon', web: 'WebDevelopment', ui: 'UIUX',
+    mongo: 'MongoDB', javascript: 'JavaScript', java: 'Java', c: 'C++', 
+    project: 'ProjectWork', collab: 'Collaboration', app: 'AppDev'
+  };
+
+  words.forEach(w => { if (keywordMap[w]) potentialTags.push(keywordMap[w]); });
+  
+  // Large pool of random fallbacks
+  const fallbacks = [
+    'Innovation', 'Developer', 'Coding', 'OpenSource', 'Student', 'Tech', 
+    'Startup', 'Engineering', 'Web3', 'Cloud', 'Design', 'Software', 'Algorithms'
+  ];
+  
+  // Combine mapped keywords with shuffled fallbacks
+  let allCandidates = [...potentialTags, ...fallbacks.sort(() => 0.5 - Math.random())];
+  
+  // Remove duplicates and already existing tags
+  let uniqueNewTags = [...new Set(allCandidates)].filter(t => !existingTags.includes(t));
+  
+  // Return exactly 3 new tags each time
+  return uniqueNewTags.slice(0, 3); 
 };
 
-// 1. MESSAGES COMPONENT
-function BlueprintPostCard({ post }) {
+
+// 1. POST CARD COMPONENT
+function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
+  const authorName = post.author?.fullName || 'User';
+  const authorHandle = post.author?.handle || 'user';
+  const authorPic = post.author?.profilePicture;
+  
+  const isAuthor = currentUser?.handle === authorHandle;
+  const [shareCount, setShareCount] = useState(post.shareCount || 0);
+  const [showOptions, setShowOptions] = useState(false);
+
+  const handleShare = async () => {
+    const postUrl = `${window.location.origin}/post/${post._id}`;
+    navigator.clipboard.writeText(`Check out this post by @${authorHandle}:\n\n${postUrl}`);
+    setShareCount(prev => prev + 1);
+    alert("Post link copied to clipboard!");
+    try {
+       await fetch(`${import.meta.env.VITE_API_URL}/api/posts/${post._id}/share`, { method: 'PUT' });
+    } catch (e) { console.error("Share count update failed", e) }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm("Are you sure you want to delete this post?")) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/posts/${post._id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) onPostDeleted(post._id);
+    } catch (e) { console.error(e); }
+  };
+  
   return (
     <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#1a1f2e]">
-      
-      {/* TOP BANNER (Timer & Urgency) based on image blueprints */}
       {post.deadline && (
-        <div className={`px-4 py-2 text-center text-sm font-bold text-white ${post.urgency === 'high' ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-amber-600 to-orange-700'}`}>
-          {post.urgency === 'high' ? '🔥 Urgent: ' : '⏳ Deadline approaching: '}
-          {post.deadline}
+        <div className="bg-amber-600/90 px-4 py-1.5 text-center text-xs font-bold text-white backdrop-blur-md">
+           ⏳ Recruitment Deadline: {new Date(post.deadline).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
         </div>
       )}
-
       <div className="p-5">
-        {/* POST TEXT */}
-        <p className="text-base text-slate-800 dark:text-slate-100">{post.content}</p>
-
-        {/* MEDIA / DOCUMENT SECTION */}
-        {post.mediaType === 'image' && (
-          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-            <img src={post.mediaUrl} alt="Post media" className="w-full object-cover" />
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+             {authorPic ? (
+               <img src={authorPic} alt={authorName} className="h-10 w-10 rounded-full object-cover border border-slate-200 dark:border-slate-700" />
+             ) : (
+               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white font-bold">
+                 {authorName.substring(0,2).toUpperCase()}
+               </div>
+             )}
+             <div>
+               <p className="text-sm font-bold text-slate-900 dark:text-white">
+                 <Link to={`/profile/${authorHandle}`} className="hover:underline">{authorName}</Link>
+               </p>
+               <Link to={`/profile/${authorHandle}`} className="text-xs font-mono text-blue-500 hover:underline">@{authorHandle}</Link>
+             </div>
           </div>
-        )}
-        
-        {post.mediaType === 'document' && (
-          <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
-            <div className="flex items-center gap-3">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-lg text-white font-bold text-xs ${post.docExt === 'PDF' ? 'bg-red-500' : 'bg-blue-500'}`}>
-                {post.docExt}
-              </div>
-              <span className="font-semibold text-slate-700 dark:text-slate-200">{post.docName}</span>
-            </div>
-            <button className="rounded-lg p-2 hover:bg-slate-200 dark:hover:bg-slate-700"><Download size={18} className="text-slate-500" /></button>
+          
+          <div className="flex items-center gap-2 relative">
+             <span className="text-xs text-slate-400">
+               {new Date(post.createdAt).toLocaleDateString() === new Date().toLocaleDateString() ? 'Today' : new Date(post.createdAt).toLocaleDateString()}
+             </span>
+             {isAuthor && (
+               <div className="relative">
+                 <button onClick={() => setShowOptions(!showOptions)} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                   <MoreVertical size={16} />
+                 </button>
+                 {showOptions && (
+                   <div className="absolute right-0 top-6 z-10 w-32 rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                     <button onClick={handleDelete} className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs font-bold text-red-600 hover:bg-slate-50 dark:hover:bg-slate-700">
+                       <Trash2 size={14}/> Delete Post
+                     </button>
+                   </div>
+                 )}
+               </div>
+             )}
           </div>
-        )}
-
-        {/* MULTI-COLORED GLOWING TAGS */}
-        <div className="mt-5 flex flex-wrap gap-2">
-          {post.tags.map((tag, idx) => (
-            <span key={idx} className={`rounded-full border px-3 py-1 text-xs font-bold shadow-[0_0_8px_rgba(0,0,0,0.1)] backdrop-blur-sm 
-              ${idx % 4 === 0 ? 'border-orange-500/50 text-orange-500 dark:shadow-[0_0_8px_rgba(249,115,22,0.3)]' : 
-                idx % 4 === 1 ? 'border-emerald-500/50 text-emerald-500 dark:shadow-[0_0_8px_rgba(16,185,129,0.3)]' :
-                idx % 4 === 2 ? 'border-blue-500/50 text-blue-500 dark:shadow-[0_0_8px_rgba(59,130,246,0.3)]' : 
-                'border-purple-500/50 text-purple-500 dark:shadow-[0_0_8px_rgba(168,85,247,0.3)]'}`}>
-              #{tag}
-            </span>
-          ))}
         </div>
 
-        {/* ACTION BUTTONS */}
+        <p className="whitespace-pre-line text-base text-slate-800 dark:text-slate-100">{post.content}</p>
+
+        {post.tags && post.tags.length > 0 && (
+          <div className="mt-5 flex flex-wrap gap-2">
+            {post.tags.map((tag, idx) => (
+              <span key={idx} className={`rounded-full border px-3 py-1 text-xs font-bold shadow-[0_0_8px_rgba(0,0,0,0.1)] backdrop-blur-sm 
+                ${idx % 4 === 0 ? 'border-orange-500/50 text-orange-500' : 
+                  idx % 4 === 1 ? 'border-emerald-500/50 text-emerald-500' :
+                  idx % 4 === 2 ? 'border-blue-500/50 text-blue-500' : 
+                  'border-purple-500/50 text-purple-500'}`}>
+                {tag.startsWith('#') ? tag : `#${tag}`}
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="mt-5 flex items-center gap-6 border-t border-slate-100 pt-4 text-slate-500 dark:border-slate-800 dark:text-slate-400">
-          <button className="hover:text-blue-500"><ThumbsUp size={20} /></button>
-          <button className="hover:text-blue-500"><MessageSquare size={20} /></button>
-          <button className="ml-auto hover:text-blue-500"><Share2 size={20} /></button>
+          <button className="flex items-center gap-2 hover:text-blue-500 transition-colors">
+             <MessageSquare size={20} />
+             <span className="text-xs font-semibold">Comment</span>
+          </button>
+          
+          <button onClick={handleShare} className="ml-auto flex items-center gap-2 hover:text-blue-500 transition-colors">
+             <Share2 size={20} />
+             <span className="text-xs font-semibold">{shareCount} Shares</span>
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
 function Messages() {
   return (
     <div className="mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm dark:border-slate-800 dark:bg-[#0b1120]">
@@ -108,21 +181,21 @@ function Messages() {
 
 // 2. PROFILE COMPONENT
 function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
-  const { updateUser } = useAuth(); // NEW: To sync photo globally
+  const { updateUser } = useAuth(); 
   const [userData, setUserData] = useState(isOwnProfile ? currentUser : null);
   const [isLoadingUser, setIsLoadingUser] = useState(!isOwnProfile);
   const [userNotFound, setUserNotFound] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
   const [githubData, setGithubData] = useState(null);
   const [ghLoading, setGhLoading] = useState(false);
-
-  const [editForm, setEditForm] = useState({
-    tagline: '', about: '', newLinkTitle: '', newLinkUrl: '', feedbackUser: '', feedbackText: '', githubUsername: '', newSkill: '', newInterest: ''
-  });
   
-  // States for Post UI in Profile
-  const [draft, setDraft] = useState(localStorage.getItem('postDraft') || ''); // Naya (LocalStorage read karega):
-  const [showAiConfirm, setShowAiConfirm] = useState(false);
+  const [userPosts, setUserPosts] = useState([]);
+  const [draft, setDraft] = useState(localStorage.getItem('postDraft') || ''); 
+  const [draftTags, setDraftTags] = useState([]); 
+  const [draftDeadline, setDraftDeadline] = useState('');
+  const [isPosting, setIsPosting] = useState(false); 
+
+  const [editForm, setEditForm] = useState({ tagline: '', about: '', newLinkTitle: '', newLinkUrl: '', githubUsername: '', newSkill: '', newInterest: '' });
 
   useEffect(() => {
     if (!isOwnProfile && profileHandle) {
@@ -142,13 +215,14 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
 
   useEffect(() => {
     if (userData) {
-      setEditForm(prev => ({
-        ...prev, tagline: userData.tagline || '', about: userData.about || '', githubUsername: userData.githubUsername || ''
-      }));
+      setEditForm(prev => ({ ...prev, tagline: userData.tagline || '', about: userData.about || '', githubUsername: userData.githubUsername || '' }));
+      fetch(`${import.meta.env.VITE_API_URL}/api/posts`)
+        .then(res => res.json())
+        .then(data => { if(!data.error) setUserPosts(data.filter(p => p.author?.handle === userData.handle)); })
+        .catch(console.error);
     }
   }, [userData]);
 
-  // Fetch GitHub Analysis automatically if username exists
   useEffect(() => {
     if (userData?.githubUsername) {
       setGhLoading(true);
@@ -164,10 +238,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   const handleSaveProfile = async (updates) => {
     if (!isOwnProfile) return;
     const newUserData = { ...userData, ...updates };
-    setUserData(newUserData); 
-    updateUser(updates); // Sync with top right navbar instantly!
-    setActiveModal(null);
-    
+    setUserData(newUserData); updateUser(updates); setActiveModal(null);
     try {
       await fetch(`${import.meta.env.VITE_API_URL}/api/auth/update-profile`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: userData._id, ...updates })
@@ -175,25 +246,28 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
     } catch (error) { console.error('Failed to save to DB', error); }
   };
 
-  // NAYA FUNCTION: Delete karne ke liye
   const handleRemoveItem = (field, itemToRemove) => {
-    if (field === 'links') {
-      handleSaveProfile({ links: userData.links.filter(link => link.title !== itemToRemove.title) });
-    } else {
-      handleSaveProfile({ [field]: userData[field].filter(item => item !== itemToRemove) });
-    }
+    if (field === 'links') handleSaveProfile({ links: userData.links.filter(link => link.title !== itemToRemove.title) });
+    else handleSaveProfile({ [field]: userData[field].filter(item => item !== itemToRemove) });
   };
 
-  const handleImageUpload = (e, type) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (type === 'avatar') handleSaveProfile({ profilePicture: reader.result });
-        if (type === 'cover') handleSaveProfile({ coverPhoto: reader.result });
-      };
-      reader.readAsDataURL(file);
-    }
+  const handleCreatePost = async () => {
+    if (!draft.trim() || isPosting) return;
+    setIsPosting(true);
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ content: draft, tags: draftTags, deadline: draftDeadline || null })
+      });
+      if (response.ok) {
+        const newPost = await response.json();
+        newPost.author = userData; 
+        setUserPosts(prev => [newPost, ...prev]);
+        setDraft(''); setDraftTags([]); setDraftDeadline(''); localStorage.removeItem('postDraft'); setActiveModal(null);
+      }
+    } catch (error) { console.error('Error posting:', error); } finally { setIsPosting(false); }
   };
 
   if (isLoadingUser) return <div className="py-20 text-center">Loading...</div>;
@@ -205,12 +279,22 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-12">
       
+      {/* BACK BUTTON (Only shows if looking at someone else's profile) */}
+      {!isOwnProfile && (
+        <Link to="/" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors">
+          <ArrowLeft size={16} /> Back to Feed
+        </Link>
+      )}
+
       {/* 1. HEADER */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1120]">
         <div className="group relative h-32 w-full bg-slate-200 sm:h-48 dark:bg-slate-800" style={userData.coverPhoto ? { backgroundImage: `url(${userData.coverPhoto})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}>
           {isOwnProfile && (
             <label className="absolute right-4 top-4 hidden h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/80 group-hover:flex">
-              <Camera size={15} /> <input type="file" className="hidden" onChange={(e) => handleImageUpload(e, 'cover')} />
+              <Camera size={15} /> <input type="file" className="hidden" onChange={(e) => {
+                const f = e.target.files[0];
+                if(f) { const r = new FileReader(); r.onloadend = () => handleSaveProfile({ coverPhoto: r.result }); r.readAsDataURL(f); }
+              }} />
             </label>
           )}
         </div>
@@ -218,7 +302,10 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
           <div className="absolute -top-16 left-6 flex h-28 w-28 items-center justify-center rounded-full border-4 border-white bg-blue-600 text-3xl font-bold text-white sm:-top-20 sm:left-8 sm:h-36 sm:w-36 dark:border-[#0b1120]">
             {userData.profilePicture ? <img src={userData.profilePicture} className="h-full w-full rounded-full object-cover" /> : initials}
             {isOwnProfile && (
-              <label className="absolute bottom-2 right-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-slate-100 text-slate-700 dark:border-[#0b1120] dark:bg-slate-800 dark:text-white"><Camera size={14} /><input type="file" className="hidden" onChange={(e) => handleImageUpload(e, 'avatar')} /></label>
+              <label className="absolute bottom-2 right-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-slate-100 text-slate-700 dark:border-[#0b1120] dark:bg-slate-800 dark:text-white"><Camera size={14} /><input type="file" className="hidden" onChange={(e) => {
+                const f = e.target.files[0];
+                if(f) { const r = new FileReader(); r.onloadend = () => handleSaveProfile({ profilePicture: r.result }); r.readAsDataURL(f); }
+              }} /></label>
             )}
           </div>
           {isOwnProfile && <button onClick={() => setActiveModal('edit-profile')} className="absolute right-6 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Edit3 size={16} /></button>}
@@ -348,51 +435,8 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
           </div>
         )}
       </div>
-      {/* 6. FEEDBACK RECEIVED (Reordered to top) */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
-        <h2 className="flex items-center gap-2 text-lg font-bold dark:text-white"><MessageSquareQuote size={18} className="text-blue-500" /> Feedback Received</h2>
-        {(!userData.receivedFeedbacks || userData.receivedFeedbacks.length === 0) ? (
-          <p className="mt-4 text-sm italic text-slate-500">No feedback received yet.</p>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {userData.receivedFeedbacks.map((fb, idx) => (
-              <div key={idx} className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-                <p>{fb.text}</p>
-                <span className="mt-2 block font-mono text-[10px] font-bold text-blue-500">From @{fb.fromUser}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {/* 7. ABOUT (Reordered to middle) */}
-      <div className="relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
-        {isOwnProfile && <button onClick={() => setActiveModal('edit-about')} className="absolute right-6 top-6 text-slate-400 hover:text-blue-500 transition-colors"><Edit3 size={18} /></button>}
-        <h2 className="text-lg font-bold dark:text-white">About</h2>
-        <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-400">{userData.about || 'Write something about yourself...'}</p>
-      </div>
-
-      {/* 8. FEEDBACK GIVEN (Reordered to bottom) */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-bold dark:text-white"><MessageSquareQuote size={18} className="text-indigo-500" /> Feedback Given</h2>
-          {isOwnProfile && <button onClick={() => setActiveModal('write-feedback')} className="flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-500"><Plus size={16}/> Write feedback</button>}
-        </div>
-        {(!userData.givenFeedbacks || userData.givenFeedbacks.length === 0) ? (
-          <p className="text-sm italic text-slate-500">No feedback given yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {userData.givenFeedbacks.map((fb) => (
-              <div key={fb.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
-                <Link to={`/profile/${fb.taggedUser}`} className="font-mono text-xs font-bold text-blue-500 hover:underline">@{fb.taggedUser}</Link>
-                <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">{fb.text}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 9. POSTS (Unified with Feed UI) */}
+      {/* 9. POSTS */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-lg font-bold dark:text-white">Activity & Posts</h2>
@@ -402,11 +446,22 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
             </button>
           )}
         </div>
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 py-12 dark:border-slate-700">
-          <Activity size={24} className="mb-3 text-slate-400" />
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white">No posts yet</h3>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Posts will appear here.</p>
-        </div>
+        {userPosts.length > 0 ? (
+          userPosts.map((post) => (
+            <BlueprintPostCard 
+              key={post._id} 
+              post={post} 
+              currentUser={currentUser} 
+              onPostDeleted={(id) => setUserPosts(userPosts.filter(p => p._id !== id))} 
+            />
+          ))
+        ) : (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 py-12 dark:border-slate-700">
+            <Activity size={24} className="mb-3 text-slate-400" />
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">No posts yet</h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Posts will appear here.</p>
+          </div>
+        )}
       </div>
 
       {/* MODALS */}
@@ -430,41 +485,42 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                         className="min-h-[120px] w-full resize-none bg-transparent text-sm outline-none dark:text-white" 
                      />
                      
-                     {showAiConfirm && (
-                       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="my-3 flex items-center justify-between rounded-lg bg-indigo-50 border border-indigo-100 p-3 dark:bg-indigo-900/30 dark:border-indigo-800">
-                         <div className="flex items-center gap-2"><AlertCircle size={16} className="text-indigo-600" /><p className="text-xs font-semibold text-indigo-700">Add AI tags?</p></div>
-                         <div className="flex gap-2">
-                           <button onClick={() => setShowAiConfirm(false)} className="text-xs font-bold text-slate-500">Cancel</button>
-                           <button onClick={() => { setDraft(prev => `${prev}\n\n${simulateAITagGeneration(draft)}`); setShowAiConfirm(false); }} className="rounded bg-indigo-600 px-3 py-1 text-xs font-bold text-white">Yes</button>
-                         </div>
-                       </motion.div>
+                     {draftTags.length > 0 && (
+                        <div className="my-2 flex flex-wrap gap-2">
+                           {draftTags.map(tag => (
+                             <span key={tag} className="flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                               #{tag} <button onClick={() => setDraftTags(draftTags.filter(t => t !== tag))} className="hover:text-red-500"><X size={12}/></button>
+                             </span>
+                           ))}
+                        </div>
                      )}
+                     
+                     <div className="mt-2 mb-3">
+                       <label className="flex items-center gap-2 text-xs font-bold text-slate-500 mb-1"><CalendarClock size={14}/> Recruitment Deadline (Optional)</label>
+                       <input type="datetime-local" value={draftDeadline} onChange={(e) => setDraftDeadline(e.target.value)} className="w-full rounded-lg border border-slate-200 p-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"/>
+                     </div>
 
                      <div className="mt-3 flex justify-between items-center border-t border-slate-200/50 pt-3 dark:border-slate-700/50">
-                       <div className="flex items-center gap-4 text-slate-400">
-                          <label className="cursor-pointer hover:text-blue-500"><ImageIcon size={18}/><input type="file" hidden accept="image/*"/></label>
-                          <button type="button" onClick={() => setShowAiConfirm(true)} disabled={!draft.trim()} className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 disabled:opacity-50 dark:bg-purple-900/30 dark:text-purple-400"><BrainCircuit size={14}/> AI Auto-Tag</button>
-                       </div>
-                       
+                       <button 
+                          type="button" 
+                          onClick={() => {
+                            const newTags = simulateAITagGeneration(draft, draftTags);
+                            setDraftTags([...draftTags, ...newTags]);
+                          }} 
+                          disabled={!draft.trim()} 
+                          className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 disabled:opacity-50 dark:bg-purple-900/30 dark:text-purple-400"
+                       >
+                         <BrainCircuit size={14}/> AI Tag
+                       </button>
                        <div className="flex gap-2">
-                         <button 
-                           onClick={() => { localStorage.setItem('postDraft', draft); setActiveModal(null); }} 
-                           className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                         >
-                           <Bookmark size={14}/> Save Draft
-                         </button>
-                         <button 
-                           onClick={() => { setActiveModal(null); setDraft(''); localStorage.removeItem('postDraft'); }} 
-                           disabled={!draft.trim()} 
-                           className="flex items-center gap-1.5 bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-bold disabled:opacity-50 hover:bg-blue-700"
-                         >
-                           <Send size={14}/> Post
+                         <button onClick={handleCreatePost} disabled={!draft.trim() || isPosting} className="flex items-center gap-1.5 bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-bold disabled:opacity-50 hover:bg-blue-700">
+                           <Send size={14}/> {isPosting ? 'Posting...' : 'Post'}
                          </button>
                        </div>
                      </div>
                    </div>
                 )}
-                {/* Keep existing inputs for edit-profile, edit-about, write-feedback here... */}
+                {/* Profile Edit Modals */}
                 {activeModal === 'edit-profile' && (
                   <>
                     <input type="text" placeholder="Tagline" value={editForm.tagline} onChange={(e) => setEditForm({...editForm, tagline: e.target.value})} className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
@@ -485,21 +541,9 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                 )}
                 {activeModal === 'add-link' && (
                   <div className="space-y-3">
-                    <input type="text" placeholder="Link Title (e.g. Github)" value={editForm.newLinkTitle} onChange={(e) => setEditForm({...editForm, newLinkTitle: e.target.value})} className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
-                    <input type="text" placeholder="URL (e.g. https://...)" value={editForm.newLinkUrl} onChange={(e) => setEditForm({...editForm, newLinkUrl: e.target.value})} className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
-                    
-                    {/* YEH BUTTON REPLACE KARO */}
-                    <button 
-                      onClick={() => { 
-                        if(editForm.newLinkTitle && editForm.newLinkUrl) { 
-                          handleSaveProfile({ links: [...(userData.links||[]), { title: editForm.newLinkTitle, url: editForm.newLinkUrl }] }); 
-                          setEditForm({...editForm, newLinkTitle: '', newLinkUrl: ''});
-                        }
-                      }} 
-                      className="mt-2 w-full rounded-xl bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700"
-                    >
-                      Save Changes
-                    </button>
+                    <input type="text" placeholder="Link Title" value={editForm.newLinkTitle} onChange={(e) => setEditForm({...editForm, newLinkTitle: e.target.value})} className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+                    <input type="text" placeholder="URL" value={editForm.newLinkUrl} onChange={(e) => setEditForm({...editForm, newLinkUrl: e.target.value})} className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+                    <button onClick={() => { if(editForm.newLinkTitle && editForm.newLinkUrl) { handleSaveProfile({ links: [...(userData.links||[]), { title: editForm.newLinkTitle, url: editForm.newLinkUrl }] }); setEditForm({...editForm, newLinkTitle: '', newLinkUrl: ''}); } }} className="mt-2 w-full rounded-xl bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">Save Changes</button>
                   </div>
                 )}
                 {activeModal === 'edit-about' && <textarea rows={5} value={editForm.about} onChange={(e) => setEditForm({...editForm, about: e.target.value})} className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white" />}
@@ -523,73 +567,203 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
 
 // 3. HOME FEED COMPONENT 
 function Home({ currentUser }) {
-  // E-commerce style algorithm: Combine User's Skills & Interests into active filters automatically
-  const userTags = [...(currentUser?.skills || []), ...(currentUser?.interests || [])].map(tag => tag.toLowerCase());
+  const [draft, setDraft] = useState(localStorage.getItem('postDraft') || '');
+  const [draftTags, setDraftTags] = useState([]);
+  const [draftDeadline, setDraftDeadline] = useState('');
   
-  // Dummy Data (Backend se aayega future mein). Based on your images!
-  const allPosts = [
-    {
-      id: 1,
-      urgency: 'high',
-      deadline: '6 days, 42 hours, 7 min left',
-      content: 'Seeking a Data Scientist collaborator to help refine our deep learning project pipeline.',
-      mediaType: 'document',
-      docName: 'Project_Scope_&_Dataset.pdf',
-      docExt: 'PDF',
-      tags: ['MachineLearning', 'DataMining', 'TechCollab']
-    },
-    {
-      id: 2,
-      urgency: 'medium',
-      deadline: '6 days, 42 hours, 7 min left',
-      content: 'Join our hackathon squad! We need a skilled Data Scientist to optimize our predictive models.',
-      mediaType: 'image',
-      mediaUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=800',
-      tags: ['DataAnalytics', 'DataScientist', 'Hackathon2026']
-    }
-  ];
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  
+  const [posts, setPosts] = useState([]); 
+  const [isPosting, setIsPosting] = useState(false);
+  const [activeFilter, setActiveFilter] = useState('All');
 
-  // FACET FILTER ALGORITHM: 
-  // If user has NO tags in profile, show all posts.
-  // If user HAS tags, show only posts that share AT LEAST ONE tag with the user (Intersection)
-  const filteredPosts = userTags.length === 0 
-    ? allPosts 
-    : allPosts.filter(post => 
-        post.tags.some(tag => userTags.includes(tag.toLowerCase()))
-      );
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL}/api/posts`)
+      .then(res => res.json())
+      .then(data => { if(!data.error) setPosts(data); })
+      .catch(console.error);
+  }, []);
+
+  // Live Backend Search Fetcher
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (searchQuery.length > 1) {
+        fetch(`${import.meta.env.VITE_API_URL}/api/auth/search?q=${searchQuery}`)
+          .then(res => res.json())
+          .then(data => setSearchResults(data))
+          .catch(console.error);
+      } else {
+        setSearchResults([]);
+      }
+    }, 400); 
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
+  const userTags = Array.from(new Set([...(currentUser?.skills || []), ...(currentUser?.interests || [])]));
+  
+  const filteredPosts = posts.filter(post => {
+    const contentToSearch = post.content || '';
+    const matchesSearch = searchQuery ? contentToSearch.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+    let matchesFilter = true;
+    if (activeFilter !== 'All') {
+      matchesFilter = post.tags?.some(tag => tag.toLowerCase() === activeFilter.toLowerCase());
+    }
+    return matchesSearch && matchesFilter;
+  });
+
+  const handleCreatePost = async () => {
+    if (!draft.trim() || isPosting) return;
+    setIsPosting(true);
+    const token = localStorage.getItem('token');
+  
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ content: draft, tags: draftTags, deadline: draftDeadline || null })
+      });
+  
+      if (response.ok) {
+        const newPost = await response.json();
+        newPost.author = currentUser; 
+        setPosts(prev => [newPost, ...prev]);
+        setDraft(''); setDraftTags([]); setDraftDeadline(''); localStorage.removeItem('postDraft');
+      }
+    } catch (error) { console.error('Error posting:', error); } finally { setIsPosting(false); }
+  };
 
   return (
-    <div className="mx-auto max-w-3xl pb-20">
+    <div className="mx-auto max-w-3xl pb-20 space-y-6">
       
-      {/* Filter Status UI */}
-      <div className="mb-6 flex items-center justify-between rounded-xl bg-blue-50 px-4 py-3 dark:bg-blue-900/20">
-        <div className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400">
-          <Filter size={16} />
-          {userTags.length > 0 
-            ? `Showing posts tailored to your ${userTags.length} skills & interests` 
-            : 'Showing all posts (Add skills to your profile for AI matching)'}
+      {/* SEARCH BAR */}
+      <div className="relative z-20">
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20 dark:border-slate-800 dark:bg-[#0b1120]">
+          <Search size={18} className="ml-2 text-slate-400" />
+          <input 
+            type="text" placeholder="Search posts, #tags, or people..." 
+            value={searchQuery} 
+            onChange={(e) => {
+               setSearchQuery(e.target.value);
+               setShowSearchDropdown(e.target.value.length > 1);
+            }}
+            onFocus={() => { if (searchQuery.length > 1) setShowSearchDropdown(true) }}
+            onBlur={() => setTimeout(() => setShowSearchDropdown(false), 200)}
+            className="w-full bg-transparent text-sm outline-none dark:text-white" 
+          />
+          {searchQuery && <button onClick={() => { setSearchQuery(''); setShowSearchDropdown(false); }} className="mr-2 text-xs font-bold text-slate-400">Clear</button>}
         </div>
-        <span className="rounded-md bg-white px-2 py-1 text-xs font-bold text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-300">
-          {filteredPosts.length} Results
-        </span>
+
+        {/* Dropdown for Backend User matches */}
+        {showSearchDropdown && searchQuery && (
+          <div className="absolute top-14 left-0 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
+             {searchResults.length > 0 ? (
+               searchResults.map(user => (
+                 <Link key={user.handle} to={`/profile/${user.handle}`} className="flex items-center gap-3 border-b border-slate-100 p-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
+                    {user.profilePicture ? (
+                       <img src={user.profilePicture} className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-bold dark:bg-blue-900/50 dark:text-blue-300">
+                         {user.fullName?.substring(0,2).toUpperCase()}
+                       </div>
+                    )}
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">{user.fullName}</h4>
+                      <p className="text-xs text-slate-500 line-clamp-1">{user.tagline || `@${user.handle}`}</p>
+                    </div>
+                 </Link>
+               ))
+             ) : (
+               <div className="p-4 text-center text-sm text-slate-500">Press enter to filter posts for "{searchQuery}"</div>
+             )}
+          </div>
+        )}
+      </div>
+
+      {/* CREATE POST BOX IN FEED */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0b1120]">
+        <textarea 
+          value={draft} onChange={(e) => setDraft(e.target.value)} 
+          placeholder="Need a teammate? Describe your project..." 
+          className="min-h-[100px] w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white" 
+        />
+        
+        {draftTags.length > 0 && (
+          <div className="my-2 flex flex-wrap gap-2">
+             {draftTags.map(tag => (
+               <span key={tag} className="flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                 #{tag} <button onClick={() => setDraftTags(draftTags.filter(t => t !== tag))} className="hover:text-red-500"><X size={12}/></button>
+               </span>
+             ))}
+          </div>
+        )}
+
+        <div className="mt-2 mb-3">
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-500 mb-1"><CalendarClock size={14}/> Recruitment Deadline (Optional)</label>
+          <input type="datetime-local" value={draftDeadline} onChange={(e) => setDraftDeadline(e.target.value)} className="w-full rounded-lg border border-slate-200 p-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"/>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
+          <button 
+             type="button" 
+             onClick={() => {
+               const newTags = simulateAITagGeneration(draft, draftTags);
+               setDraftTags([...draftTags, ...newTags]);
+             }} 
+             disabled={!draft.trim()} 
+             className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
+          >
+            <BrainCircuit size={14}/> AI Tag
+          </button>
+          <div className="flex gap-2">
+            <button onClick={handleCreatePost} disabled={!draft.trim() || isPosting} className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+              <Send size={14}/> {isPosting ? 'Posting...' : 'Post'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* DYNAMIC FEED FILTERS */}
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        <button 
+           onClick={() => setActiveFilter('All')} 
+           className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${activeFilter === 'All' ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}
+        >
+          All
+        </button>
+        {userTags.map(tag => (
+          <button 
+             key={tag}
+             onClick={() => setActiveFilter(tag)} 
+             className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${activeFilter === tag ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.3)]' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}
+          >
+            {tag}
+          </button>
+        ))}
       </div>
 
       {/* Render Posts */}
       {filteredPosts.length > 0 ? (
-        filteredPosts.map(post => <BlueprintPostCard key={post.id} post={post} />)
+        filteredPosts.map(post => (
+          <BlueprintPostCard 
+            key={post._id} 
+            post={post} 
+            currentUser={currentUser} 
+            onPostDeleted={(id) => setPosts(posts.filter(p => p._id !== id))} 
+          />
+        ))
       ) : (
         <div className="text-center py-20">
           <AlertCircle size={48} className="mx-auto text-slate-300 mb-4" />
-          <h3 className="font-bold dark:text-white">No exact matches found</h3>
-          <p className="text-sm text-slate-500 mt-2">Try adding different skills to your profile to see more posts.</p>
+          <h3 className="font-bold dark:text-white">No posts found</h3>
+          <p className="text-sm text-slate-500 mt-2">Try selecting a different filter or search query.</p>
         </div>
       )}
     </div>
   );
 }
 
-
-// 4. MAIN EXPORT ROUTER
 export default function Dashboard({ activeTab, user }) { 
   const location = useLocation();
   const isProfileRoute = location.pathname.startsWith('/profile/');

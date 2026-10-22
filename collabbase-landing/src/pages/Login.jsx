@@ -26,31 +26,11 @@ const Login = ({ isDarkMode, onToggleTheme, onSignedIn }) => {
 
   const handleGoogleSuccess = async (tokenResponse) => {
     try {
-      // 1. Fetch user details from Google
-      const userInfo = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-      }).then(res => res.json());
-
-      const userEmail = userInfo.email;
-
-      // 2. Restrict access to MITS domains
-      if (!userEmail.endsWith('@mitsgwl.ac.in') && !userEmail.endsWith('@mitsgwalior.in')) {
-        setError('Access restricted to campus students. Please use your official MITS email.');
-        return;
-      }
-
-      // 3. SEND DATA TO YOUR BACKEND
+      // Direct backend call with token!
       const backendResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/google-login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          googleId: userInfo.sub, // Google's unique ID for the user
-          email: userInfo.email,
-          fullName: userInfo.name,
-          profilePicture: userInfo.picture
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: tokenResponse.access_token })
       });
 
       const data = await backendResponse.json();
@@ -60,21 +40,17 @@ const Login = ({ isDarkMode, onToggleTheme, onSignedIn }) => {
         return;
       }
 
-      // 4. Check profile completion status
       setError('');
+      // NAYA: Secure Token save kar rahe hain aage Posts use karne ke liye
+      localStorage.setItem('token', data.token); 
       console.log('✅ Successfully saved to MongoDB:', data.user);
 
-      // We add the routing logic (Dashboard vs Onboarding) in the next step!
-
       if (!data.user.isProfileComplete) {
-        // First-time user: redirect to Onboarding to collect GitHub username, Branch, and Year
         onSignedIn('onboarding', data.user); 
       } else {
-        // Returning user with complete profile: go straight to Dashboard
         onSignedIn('dashboard', data.user); 
       }
       
-
     } catch (err) {
       console.error(err);
       setError('Authentication failed. Please try again.');
@@ -144,16 +120,6 @@ const Login = ({ isDarkMode, onToggleTheme, onSignedIn }) => {
               {error}
             </motion.p>
           )}
-          {isVerified && (
-            <motion.p
-              role="status"
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-500/10 dark:text-emerald-300"
-            >
-              Institute email verified.
-            </motion.p>
-          )}
 
           <motion.button
             type="button"
@@ -169,44 +135,6 @@ const Login = ({ isDarkMode, onToggleTheme, onSignedIn }) => {
             <GoogleMark />
             Sign in with Google
           </motion.button>
-
-          <p className="mt-5 text-center text-xs leading-5 text-slate-500 dark:text-slate-500">
-            Your institute email is only used to verify campus access.
-          </p>
-        </motion.section>
-
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full rounded-[18px] border border-white/75 bg-white/55 p-4 shadow-[0_16px_50px_-32px_rgba(15,23,42,0.2)] backdrop-blur-2xl dark:border-white/[0.08] dark:bg-slate-900/45 dark:shadow-[0_18px_60px_-35px_rgba(0,0,0,0.8)] sm:p-6"
-        >
-          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-500">Developed By</p>
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 shrink-0 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-500 p-[2px] shadow-md shadow-blue-500/15">
-              <div aria-label="Nishika Jain profile placeholder" role="img" className="flex h-full w-full items-center justify-center rounded-full border-2 border-white/80 bg-slate-100 text-sm font-semibold tracking-wide text-slate-700 dark:border-slate-900 dark:bg-slate-800 dark:text-slate-200">
-                NJ
-              </div>
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-[15px] font-semibold leading-5 text-slate-900 dark:text-white">Nishika Jain</h2>
-              <p className="mt-1 text-xs font-medium text-blue-700 dark:text-blue-300">IT(AIR), 2025-2029</p>
-              <nav aria-label="Developer social links" className="mt-3 flex items-center gap-2">
-                {socialLinks.map(({ label, href, Icon }) => (
-                  <a
-                    key={label}
-                    href={href}
-                    aria-label={label}
-                    target={href.startsWith('mailto:') ? undefined : '_blank'}
-                    rel={href.startsWith('mailto:') ? undefined : 'noreferrer'}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/80 bg-white/65 text-slate-500 transition duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700/70 dark:bg-slate-800/60 dark:text-slate-400 dark:hover:border-blue-400/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
-                  >
-                    <Icon size={15} strokeWidth={1.8} />
-                  </a>
-                ))}
-              </nav>
-            </div>
-          </div>
         </motion.section>
       </div>
     </main>

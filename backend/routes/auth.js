@@ -1,35 +1,83 @@
 const express = require('express');
 const User = require('../models/User');
+const jwt = require('jsonwebtoken'); // Naya add hua hai security ke liye
 const router = express.Router();
 
-router.post('/google-login', async (req, res) => {
-  const { googleId, email, fullName, profilePicture } = req.body;
+router.get('/search', async (req, res) => {
+  const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  if (!query) return res.status(200).json([]);
+
+  const escapedQuery = query.slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const searchPattern = new RegExp(escapedQuery, 'i');
 
   try {
-    if (!email.endsWith('@mitsgwl.ac.in') && !email.endsWith('@mitsgwalior.in')) {
+    const users = await User.find({
+      $or: [
+        { fullName: searchPattern },
+        { handle: searchPattern },
+        { skills: searchPattern },
+      ],
+    })
+      .select('fullName handle profilePicture skills')
+      .limit(5);
+
+    return res.status(200).json(users);
+  } catch (error) {
+    console.error('User Search Error:', error);
+    return res.status(500).json({ error: 'Failed to search users.' });
+  }
+});
+
+router.post('/google-login', async (req, res) => {
+  const { accessToken } = req.body; // Ab hum sirf token le rahe hain
+
+  if (!accessToken) {
+    return res.status(400).json({ error: 'Google access token is required.' });
+  }
+
+  try {
+    // Google ke server se token verify karwa rahe hain
+    const googleResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!googleResponse.ok) {
+      return res.status(401).json({ error: 'Invalid Google access token.' });
+    }
+
+    const identity = await googleResponse.json();
+
+    if (!identity.email_verified || (!identity.email.endsWith('@mitsgwl.ac.in') && !identity.email.endsWith('@mitsgwalior.in'))) {
       return res.status(403).json({ error: "Access restricted to campus students." });
     }
 
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email: identity.email });
 
     if (!user) {
       user = new User({
-        googleId,
-        email,
-        fullName,
-        profilePicture,
+        googleId: identity.sub,
+        email: identity.email,
+        fullName: identity.name,
+        profilePicture: identity.picture,
+        handle: identity.email.split('@')[0] // Default handle add kiya
       });
       await user.save();
     }
 
-    res.status(200).json({ message: "Login successful", user });
+    // JWT Token Generate kar rahe hain (7 days expiry)
+    const token = jwt.sign(
+      { sub: user._id.toString() },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.status(200).json({ message: "Login successful", user, token });
   } catch (error) {
     console.error("Login Error:", error);
     res.status(500).json({ error: "Server error during login" });
   }
 });
 
-// POST /api/auth/complete-profile (With GitHub Verification)
 // POST /api/auth/complete-profile
 router.post('/complete-profile', async (req, res) => {
   const { userId, fullName, handle, enrollmentNo, branch, year, startYear, endYear, githubUsername } = req.body;
@@ -38,9 +86,6 @@ router.post('/complete-profile', async (req, res) => {
     if (!userId || !githubUsername || !handle) {
       return res.status(400).json({ error: "User ID, GitHub username, and Handle are required." });
     }
-
-    // WE REMOVED THE BACKEND GITHUB FETCH HERE. 
-    // The frontend already verified it, so we trust it and just save to MongoDB!
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
@@ -62,7 +107,6 @@ router.post('/complete-profile', async (req, res) => {
     res.status(200).json({ message: "Profile completed successfully!", user: updatedUser });
   } catch (error) {
     console.error("Onboarding Error:", error);
-    // If handle is already taken, MongoDB will throw a duplicate key error (code 11000)
     if (error.code === 11000 && error.keyPattern?.handle) {
       return res.status(400).json({ error: "This @username is already taken. Please choose another." });
     }
@@ -72,13 +116,11 @@ router.post('/complete-profile', async (req, res) => {
 
 // PUT /api/auth/update-profile
 router.put('/update-profile', async (req, res) => {
-  // 1. Add githubUsername and givenFeedbacks to the destructured list
   const { userId, tagline, about, links, profilePicture, coverPhoto, githubUsername, givenFeedbacks } = req.body;
   
   try {
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      // 2. Add them to the $set object
       { $set: { tagline, about, links, profilePicture, coverPhoto, githubUsername, givenFeedbacks } },
       { new: true }
     );
@@ -89,7 +131,6 @@ router.put('/update-profile', async (req, res) => {
 });
 
 // GET /api/auth/user/:handle
-// Fetches a public profile by their unique username handle
 router.get('/user/:handle', async (req, res) => {
   try {
     const user = await User.findOne({ handle: req.params.handle });
