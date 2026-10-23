@@ -28,17 +28,14 @@ const userSchema = new mongoose.Schema({
   
   // Bio & Links
   tagline: { type: String, default: "" }, 
-  about: { type: String, default: "" },
-  
-  // ADD THESE 3 LINES:
-  githubUsername: { type: String, default: "" },
-  givenFeedbacks: { type: Array, default: [] },
-  receivedFeedbacks: { type: Array, default: [] },
-  
   skills: [{ type: String }],
   interests: [{ type: String }],
   githubUsername: { type: String, default: "" },
-
+  githubAnalysisCache: { type: Object, default: null },
+  about: { type: String, default: "" },
+  givenFeedbacks: [{ type: String }],
+  receivedFeedbacks: [{ type: String }],
+  
   links: [linkSchema],
   
   isProfileComplete: { type: Boolean, default: false }

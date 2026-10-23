@@ -1,6 +1,6 @@
 const express = require('express');
 const User = require('../models/User');
-const jwt = require('jsonwebtoken'); // Naya add hua hai security ke liye
+const jwt = require('jsonwebtoken'); 
 const router = express.Router();
 
 router.get('/search', async (req, res) => {
@@ -18,7 +18,7 @@ router.get('/search', async (req, res) => {
         { skills: searchPattern },
       ],
     })
-      .select('fullName handle profilePicture skills')
+      .select('fullName handle profilePicture skills tagline')
       .limit(5);
 
     return res.status(200).json(users);
@@ -29,14 +29,13 @@ router.get('/search', async (req, res) => {
 });
 
 router.post('/google-login', async (req, res) => {
-  const { accessToken } = req.body; // Ab hum sirf token le rahe hain
+  const { accessToken } = req.body; 
 
   if (!accessToken) {
     return res.status(400).json({ error: 'Google access token is required.' });
   }
 
   try {
-    // Google ke server se token verify karwa rahe hain
     const googleResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -59,12 +58,11 @@ router.post('/google-login', async (req, res) => {
         email: identity.email,
         fullName: identity.name,
         profilePicture: identity.picture,
-        handle: identity.email.split('@')[0] // Default handle add kiya
+        handle: identity.email.split('@')[0] 
       });
       await user.save();
     }
 
-    // JWT Token Generate kar rahe hain (7 days expiry)
     const token = jwt.sign(
       { sub: user._id.toString() },
       process.env.JWT_SECRET,
@@ -78,7 +76,6 @@ router.post('/google-login', async (req, res) => {
   }
 });
 
-// POST /api/auth/complete-profile
 router.post('/complete-profile', async (req, res) => {
   const { userId, fullName, handle, enrollmentNo, branch, year, startYear, endYear, githubUsername } = req.body;
 
@@ -114,15 +111,14 @@ router.post('/complete-profile', async (req, res) => {
   }
 });
 
-// PUT /api/auth/update-profile
 router.put('/update-profile', async (req, res) => {
-  // Yahan skills aur interests add kiye hain
-  const { userId, tagline, about, links, profilePicture, coverPhoto, githubUsername, givenFeedbacks, skills, interests } = req.body;
+  const { userId, tagline, about, links, profilePicture, coverPhoto, githubUsername, givenFeedbacks, skills, interests, githubAnalysisCache } = req.body;
   
   try {
+    // Normalization ensures backend matching works regardless of cases/symbols
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { $set: { tagline, about, links, profilePicture, coverPhoto, githubUsername, givenFeedbacks, skills, interests } },
+      { $set: { tagline, about, links, profilePicture, coverPhoto, githubUsername, givenFeedbacks, skills, interests, githubAnalysisCache } },
       { new: true }
     );
     res.status(200).json({ message: "Profile updated", user: updatedUser });
@@ -131,7 +127,6 @@ router.put('/update-profile', async (req, res) => {
   }
 });
 
-// GET /api/auth/user/:handle
 router.get('/user/:handle', async (req, res) => {
   try {
     const user = await User.findOne({ handle: req.params.handle });

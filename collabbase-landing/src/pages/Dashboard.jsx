@@ -4,7 +4,7 @@ import {
   Edit3, Github, Linkedin, ExternalLink, Activity, 
   Send, Plus, Sparkles, MessageCircle, CalendarClock,
   Youtube, Globe, Camera, Image as ImageIcon,
-  X, MessageSquareQuote, Search, BrainCircuit, Bookmark, AlertCircle, Cpu, ThumbsUp, MessageSquare, Share2, MoreVertical, Trash2, ArrowLeft
+  X, MessageSquareQuote, Search, BrainCircuit, Bookmark, AlertCircle, Cpu, ThumbsUp, MessageSquare, Share2, MoreVertical, Trash2, ArrowLeft, Info, HelpCircle
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; 
@@ -27,7 +27,10 @@ const getLinkIcon = (url) => {
 
 const getCoderBadge = (langs) => langs?.length > 0 ? `${langs[0].name} Developer` : "Developer";
 
-// FULLY DYNAMIC AI TAGGER
+// Tag Normalization Engine for Semantic Search
+const normalizeTag = (tag) => tag ? tag.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+
+// State-Aware AI Engine
 const simulateAITagGeneration = (text, existingTags = []) => {
   const words = (text || "").toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/);
   let potentialTags = [];
@@ -37,24 +40,24 @@ const simulateAITagGeneration = (text, existingTags = []) => {
     api: 'API', ml: 'MachineLearning', ai: 'ArtificialIntelligence', data: 'DataScience',
     python: 'Python', hackathon: 'Hackathon', web: 'WebDevelopment', ui: 'UIUX',
     mongo: 'MongoDB', javascript: 'JavaScript', java: 'Java', c: 'C++', 
-    project: 'ProjectWork', collab: 'Collaboration', app: 'AppDev'
+    project: 'ProjectWork', collab: 'Collaboration', app: 'AppDev',
+    tailwindcss: 'TailwindCSS', express: 'ExpressJS', next: 'NextJS'
   };
 
   words.forEach(w => { if (keywordMap[w]) potentialTags.push(keywordMap[w]); });
   
-  // Large pool of random fallbacks
   const fallbacks = [
     'Innovation', 'Developer', 'Coding', 'OpenSource', 'Student', 'Tech', 
     'Startup', 'Engineering', 'Web3', 'Cloud', 'Design', 'Software', 'Algorithms'
   ];
   
-  // Combine mapped keywords with shuffled fallbacks
   let allCandidates = [...potentialTags, ...fallbacks.sort(() => 0.5 - Math.random())];
   
-  // Remove duplicates and already existing tags
-  let uniqueNewTags = [...new Set(allCandidates)].filter(t => !existingTags.includes(t));
+  // Normalize existing tags to prevent AI from suggesting duplicates in a different casing
+  const normalizedExisting = existingTags.map(normalizeTag);
   
-  // Return exactly 3 new tags each time
+  let uniqueNewTags = [...new Set(allCandidates)].filter(t => !normalizedExisting.includes(normalizeTag(t)));
+  
   return uniqueNewTags.slice(0, 3); 
 };
 
@@ -186,6 +189,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   const [isLoadingUser, setIsLoadingUser] = useState(!isOwnProfile);
   const [userNotFound, setUserNotFound] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
+  
   const [githubData, setGithubData] = useState(null);
   const [ghLoading, setGhLoading] = useState(false);
   
@@ -194,6 +198,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   const [draftTags, setDraftTags] = useState([]); 
   const [draftDeadline, setDraftDeadline] = useState('');
   const [isPosting, setIsPosting] = useState(false); 
+  const [manualTag, setManualTag] = useState('');
 
   const [editForm, setEditForm] = useState({ tagline: '', about: '', newLinkTitle: '', newLinkUrl: '', githubUsername: '', newSkill: '', newInterest: '' });
 
@@ -223,17 +228,28 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
     }
   }, [userData]);
 
+  // GITHUB CACHE SYSTEM & BACKGROUND FETCH
   useEffect(() => {
     if (userData?.githubUsername) {
-      setGhLoading(true);
-      fetch(`${import.meta.env.VITE_API_URL}/api/github/analyze/${userData.githubUsername}`)
-        .then(res => res.json())
-        .then(data => {
-          if (!data.error) setGithubData(data);
-          setGhLoading(false);
-        }).catch(() => setGhLoading(false));
+      // Step 1: Load from Cache instantly if exists
+      if (userData.githubAnalysisCache) {
+        setGithubData(userData.githubAnalysisCache);
+      } else {
+        // Step 2: Fetch and Save if no cache exists
+        setGhLoading(true);
+        fetch(`${import.meta.env.VITE_API_URL}/api/github/analyze/${userData.githubUsername}`)
+          .then(res => res.json())
+          .then(data => {
+            if (!data.error) {
+              setGithubData(data);
+              // Save to database instantly as cache
+              if (isOwnProfile) handleSaveProfile({ githubAnalysisCache: data });
+            }
+            setGhLoading(false);
+          }).catch(() => setGhLoading(false));
+      }
     }
-  }, [userData?.githubUsername]);
+  }, [userData?.githubUsername, isOwnProfile]);
 
   const handleSaveProfile = async (updates) => {
     if (!isOwnProfile) return;
@@ -270,6 +286,17 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
     } catch (error) { console.error('Error posting:', error); } finally { setIsPosting(false); }
   };
 
+  const handleManualTagAdd = (e) => {
+    if (e.key === 'Enter' && manualTag.trim()) {
+      e.preventDefault();
+      const cleanTag = manualTag.trim().replace(/^#/, '');
+      if (!draftTags.map(normalizeTag).includes(normalizeTag(cleanTag))) {
+        setDraftTags([...draftTags, cleanTag]);
+      }
+      setManualTag('');
+    }
+  };
+
   if (isLoadingUser) return <div className="py-20 text-center">Loading...</div>;
   if (userNotFound || !userData) return <div className="py-20 text-center font-bold">User not found</div>;
 
@@ -279,14 +306,13 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-12">
       
-      {/* BACK BUTTON (Only shows if looking at someone else's profile) */}
       {!isOwnProfile && (
-        <Link to="/" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors">
+        <Link to="/dashboard" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors">
           <ArrowLeft size={16} /> Back to Feed
         </Link>
       )}
 
-      {/* 1. HEADER */}
+      {/* 1. HEADER (Includes Tagline) */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1120]">
         <div className="group relative h-32 w-full bg-slate-200 sm:h-48 dark:bg-slate-800" style={userData.coverPhoto ? { backgroundImage: `url(${userData.coverPhoto})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}>
           {isOwnProfile && (
@@ -337,7 +363,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         )}
       </div>
 
-      {/* 3. GITHUB CYBERPUNK BOX */}
+      {/* 3. GITHUB CYBERPUNK BOX (With Cold Start Fallback) */}
       <div className="relative overflow-hidden rounded-2xl bg-[#060a14] border border-blue-500/20 p-8 shadow-[0_0_30px_-5px_rgba(59,130,246,0.15)] text-white">
         <div className="absolute top-[-50px] right-[-50px] w-40 h-40 bg-blue-600/20 blur-[70px] rounded-full pointer-events-none"></div>
         {ghLoading ? <div className="text-center text-sm font-mono text-blue-400">CONNECTING TO GITHUB...</div> : githubData ? (
@@ -355,66 +381,55 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                </span>
             </div>
             
-            <div className="grid grid-cols-3 gap-4 mb-8">
-               <div className="group relative overflow-hidden bg-white/5 border border-white/10 p-5 rounded-2xl backdrop-blur-sm transition-all hover:bg-white/10 hover:border-blue-500/40">
-                  <span className="block text-3xl font-black text-white group-hover:text-blue-400 transition-colors">{githubData.publicRepos}</span>
-                  <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mt-1 block">Repositories</span>
+            {githubData.publicRepos === 0 ? (
+               <div className="bg-white/5 border border-amber-500/30 p-6 rounded-2xl text-center backdrop-blur-md">
+                 <h4 className="text-amber-400 font-bold mb-2">Active Learner / Building Phase 🏗️</h4>
+                 <p className="text-xs text-slate-400">Currently bootstrapping new projects in private repositories or local environments.</p>
                </div>
-               <div className="group relative overflow-hidden bg-white/5 border border-white/10 p-5 rounded-2xl backdrop-blur-sm transition-all hover:bg-white/10 hover:border-amber-500/40">
-                  <span className="block text-3xl font-black text-amber-400 group-hover:drop-shadow-[0_0_8px_rgba(251,191,36,0.5)] transition-all">{githubData.totalStars}</span>
-                  <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mt-1 block">Total Stars</span>
-               </div>
-               <div className="group relative overflow-hidden bg-white/5 border border-white/10 p-5 rounded-2xl backdrop-blur-sm transition-all hover:bg-white/10 hover:border-emerald-500/40">
-                  <span className="block text-3xl font-black text-emerald-400 group-hover:drop-shadow-[0_0_8px_rgba(52,211,153,0.5)] transition-all">{githubData.followers}</span>
-                  <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mt-1 block">Followers</span>
-               </div>
-            </div>
-
-            {githubData.topLanguages?.length > 0 && (
-              <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-3">Top Tech Stack</p>
-                <div className="flex flex-wrap gap-2">
-                  {githubData.topLanguages.map((lang, idx) => (
-                    <div key={idx} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 backdrop-blur-sm">
-                      <span className="text-xs font-bold text-white">{lang.name}</span>
-                      <span className="text-[10px] font-mono text-blue-400">{lang.percent}%</span>
-                    </div>
-                  ))}
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-4 mb-8">
+                   <div className="group relative overflow-hidden bg-white/5 border border-white/10 p-5 rounded-2xl backdrop-blur-sm transition-all hover:bg-white/10 hover:border-blue-500/40">
+                      <span className="block text-3xl font-black text-white group-hover:text-blue-400 transition-colors">{githubData.publicRepos}</span>
+                      <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mt-1 block">Repositories</span>
+                   </div>
+                   <div className="group relative overflow-hidden bg-white/5 border border-white/10 p-5 rounded-2xl backdrop-blur-sm transition-all hover:bg-white/10 hover:border-amber-500/40">
+                      <span className="block text-3xl font-black text-amber-400 group-hover:drop-shadow-[0_0_8px_rgba(251,191,36,0.5)] transition-all">{githubData.totalStars}</span>
+                      <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mt-1 block">Total Stars</span>
+                   </div>
+                   <div className="group relative overflow-hidden bg-white/5 border border-white/10 p-5 rounded-2xl backdrop-blur-sm transition-all hover:bg-white/10 hover:border-emerald-500/40">
+                      <span className="block text-3xl font-black text-emerald-400 group-hover:drop-shadow-[0_0_8px_rgba(52,211,153,0.5)] transition-all">{githubData.followers}</span>
+                      <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mt-1 block">Followers</span>
+                   </div>
                 </div>
-              </div>
+
+                {githubData.topLanguages?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-3">Top Tech Stack</p>
+                    <div className="flex flex-wrap gap-2">
+                      {githubData.topLanguages.map((lang, idx) => (
+                        <div key={idx} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 backdrop-blur-sm">
+                          <span className="text-xs font-bold text-white">{lang.name}</span>
+                          <span className="text-[10px] font-mono text-blue-400">{lang.percent}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         ) : (
           <div className="text-center py-6 relative z-10">
             <Github size={32} className="mx-auto mb-3 text-slate-500" />
-            <h3 className="font-bold text-lg mb-1">{!userData?.githubUsername ? "GitHub Not Linked" : "Analysis Failed"}</h3>
+            <h3 className="font-bold text-lg mb-1">{!userData?.githubUsername ? "GitHub Not Linked" : "Analysis Required"}</h3>
             <p className="text-xs text-slate-400 mb-4">Link your GitHub to generate an AI-powered developer card.</p>
             {isOwnProfile && <button onClick={() => setActiveModal('edit-profile')} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold shadow-lg shadow-blue-600/20 hover:bg-blue-500 transition-colors">Update GitHub Username</button>}
           </div>
         )}
       </div>
 
-      {/* 4. SKILLS */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-bold dark:text-white"><Cpu size={18} className="text-blue-500" /> Skills & Tech Stack</h2>
-          {isOwnProfile && <button onClick={() => setActiveModal('edit-skills')} className="text-slate-400 hover:text-blue-500"><Edit3 size={18} /></button>}
-        </div>
-        {(!userData.skills || userData.skills.length === 0) ? (
-          <p className="text-sm italic text-slate-500">No skills added yet.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {userData.skills.map((skill, i) => (
-              <div key={i} className="flex items-center gap-1 rounded-full bg-slate-100 px-4 py-1.5 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                {skill}
-                {isOwnProfile && <X size={14} className="cursor-pointer text-slate-400 hover:text-red-500" onClick={() => handleRemoveItem('skills', skill)} />}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 5. CONNECT & PORTFOLIO */}
+      {/* 4. CONNECT & PORTFOLIO */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold dark:text-white">Connect & Portfolio</h2>
@@ -436,7 +451,32 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         )}
       </div>
 
-      {/* 9. POSTS */}
+      {/* 5. FEEDBACK RECEIVED */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold dark:text-white"><MessageSquareQuote size={18} className="text-green-500" /> Feedback Received</h2>
+        {(!userData.receivedFeedbacks || userData.receivedFeedbacks.length === 0) ? (
+          <p className="text-sm italic text-slate-500">No feedback received yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {userData.receivedFeedbacks.map((fb, i) => (
+               <div key={i} className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-900/50 dark:text-slate-300 border border-slate-100 dark:border-slate-800">"{fb}"</div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 6. ABOUT */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-bold dark:text-white"><Info size={18} className="text-blue-500" /> About</h2>
+          {isOwnProfile && <button onClick={() => setActiveModal('edit-about')} className="text-slate-400 hover:text-blue-500"><Edit3 size={18} /></button>}
+        </div>
+        <p className="text-sm whitespace-pre-line text-slate-700 dark:text-slate-300">
+          {userData.about || <span className="italic text-slate-500">No about added yet.</span>}
+        </p>
+      </div>
+
+      {/* 7. POSTS */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-lg font-bold dark:text-white">Activity & Posts</h2>
@@ -464,6 +504,40 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         )}
       </div>
 
+      {/* 8. SKILLS */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-bold dark:text-white"><Cpu size={18} className="text-indigo-500" /> Skills & Tech Stack</h2>
+          {isOwnProfile && <button onClick={() => setActiveModal('edit-skills')} className="text-slate-400 hover:text-indigo-500"><Edit3 size={18} /></button>}
+        </div>
+        {(!userData.skills || userData.skills.length === 0) ? (
+          <p className="text-sm italic text-slate-500">No skills added yet.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {userData.skills.map((skill, i) => (
+              <div key={i} className="flex items-center gap-1 rounded-full bg-slate-100 px-4 py-1.5 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                {skill}
+                {isOwnProfile && <X size={14} className="cursor-pointer text-slate-400 hover:text-red-500" onClick={() => handleRemoveItem('skills', skill)} />}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 9. FEEDBACK GIVEN */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold dark:text-white"><ThumbsUp size={18} className="text-blue-500" /> Feedback Given</h2>
+        {(!userData.givenFeedbacks || userData.givenFeedbacks.length === 0) ? (
+          <p className="text-sm italic text-slate-500">No feedback given yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {userData.givenFeedbacks.map((fb, i) => (
+               <div key={i} className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-900/50 dark:text-slate-300 border border-slate-100 dark:border-slate-800">"{fb}"</div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* MODALS */}
       <AnimatePresence>
         {activeModal && isOwnProfile && (
@@ -482,18 +556,25 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                         value={draft} 
                         onChange={(e) => setDraft(e.target.value)} 
                         placeholder="Need a teammate? Describe your project..." 
-                        className="min-h-[120px] w-full resize-none bg-transparent text-sm outline-none dark:text-white" 
+                        className="min-h-[100px] w-full resize-none bg-transparent text-sm outline-none dark:text-white" 
                      />
                      
-                     {draftTags.length > 0 && (
-                        <div className="my-2 flex flex-wrap gap-2">
-                           {draftTags.map(tag => (
-                             <span key={tag} className="flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                               #{tag} <button onClick={() => setDraftTags(draftTags.filter(t => t !== tag))} className="hover:text-red-500"><X size={12}/></button>
-                             </span>
-                           ))}
-                        </div>
-                     )}
+                     <div className="my-2 flex flex-wrap gap-2 items-center">
+                        {draftTags.map(tag => (
+                          <span key={tag} className="flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                            #{tag} <button onClick={() => setDraftTags(draftTags.filter(t => t !== tag))} className="hover:text-red-500"><X size={12}/></button>
+                          </span>
+                        ))}
+                        {/* UNIFIED MANUAL TAG INPUT */}
+                        <input 
+                           type="text" 
+                           value={manualTag} 
+                           onChange={e => setManualTag(e.target.value)} 
+                           onKeyDown={handleManualTagAdd} 
+                           placeholder={draftTags.length === 0 ? "Type custom tag & press Enter..." : "+ custom tag"} 
+                           className="bg-transparent text-xs outline-none text-slate-500 dark:text-slate-400 placeholder-slate-400 flex-1 min-w-[150px]"
+                        />
+                     </div>
                      
                      <div className="mt-2 mb-3">
                        <label className="flex items-center gap-2 text-xs font-bold text-slate-500 mb-1"><CalendarClock size={14}/> Recruitment Deadline (Optional)</label>
@@ -567,9 +648,11 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
 
 // 3. HOME FEED COMPONENT 
 function Home({ currentUser }) {
+  const navigate = useNavigate();
   const [draft, setDraft] = useState(localStorage.getItem('postDraft') || '');
   const [draftTags, setDraftTags] = useState([]);
   const [draftDeadline, setDraftDeadline] = useState('');
+  const [manualTag, setManualTag] = useState('');
   
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -577,7 +660,9 @@ function Home({ currentUser }) {
   
   const [posts, setPosts] = useState([]); 
   const [isPosting, setIsPosting] = useState(false);
-  const [activeFilter, setActiveFilter] = useState('All');
+  
+  // MULTI-SELECT FILTERS (Array State)
+  const [activeFilters, setActiveFilters] = useState([]);
 
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL}/api/posts`)
@@ -603,15 +688,27 @@ function Home({ currentUser }) {
 
   const userTags = Array.from(new Set([...(currentUser?.skills || []), ...(currentUser?.interests || [])]));
   
+  // MULTI-SELECT FILTERING ENGINE
   const filteredPosts = posts.filter(post => {
     const contentToSearch = post.content || '';
     const matchesSearch = searchQuery ? contentToSearch.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+    
     let matchesFilter = true;
-    if (activeFilter !== 'All') {
-      matchesFilter = post.tags?.some(tag => tag.toLowerCase() === activeFilter.toLowerCase());
+    if (activeFilters.length > 0) {
+      const normalizedPostTags = (post.tags || []).map(normalizeTag);
+      // Returns true if ANY selected filter matches the post's tags (OR logic)
+      matchesFilter = activeFilters.some(filterTag => normalizedPostTags.includes(normalizeTag(filterTag)));
     }
     return matchesSearch && matchesFilter;
   });
+
+  const toggleFilter = (tag) => {
+    if (activeFilters.includes(tag)) {
+      setActiveFilters(activeFilters.filter(t => t !== tag));
+    } else {
+      setActiveFilters([...activeFilters, tag]);
+    }
+  };
 
   const handleCreatePost = async () => {
     if (!draft.trim() || isPosting) return;
@@ -634,10 +731,21 @@ function Home({ currentUser }) {
     } catch (error) { console.error('Error posting:', error); } finally { setIsPosting(false); }
   };
 
+  const handleManualTagAdd = (e) => {
+    if (e.key === 'Enter' && manualTag.trim()) {
+      e.preventDefault();
+      const cleanTag = manualTag.trim().replace(/^#/, '');
+      if (!draftTags.map(normalizeTag).includes(normalizeTag(cleanTag))) {
+        setDraftTags([...draftTags, cleanTag]);
+      }
+      setManualTag('');
+    }
+  };
+
   return (
     <div className="mx-auto max-w-3xl pb-20 space-y-6">
       
-      {/* SEARCH BAR */}
+      {/* SEARCH BAR (Dynamic Autocomplete & Click Navigation) */}
       <div className="relative z-20">
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20 dark:border-slate-800 dark:bg-[#0b1120]">
           <Search size={18} className="ml-2 text-slate-400" />
@@ -660,7 +768,11 @@ function Home({ currentUser }) {
           <div className="absolute top-14 left-0 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
              {searchResults.length > 0 ? (
                searchResults.map(user => (
-                 <Link key={user.handle} to={`/profile/${user.handle}`} className="flex items-center gap-3 border-b border-slate-100 p-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
+                 <button 
+                    key={user.handle} 
+                    onMouseDown={() => navigate(`/profile/${user.handle}`)} // onMouseDown bypasses onBlur race condition
+                    className="w-full flex items-center gap-3 border-b border-slate-100 p-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800 text-left transition-colors"
+                 >
                     {user.profilePicture ? (
                        <img src={user.profilePicture} className="h-10 w-10 rounded-full object-cover" />
                     ) : (
@@ -672,7 +784,7 @@ function Home({ currentUser }) {
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white">{user.fullName}</h4>
                       <p className="text-xs text-slate-500 line-clamp-1">{user.tagline || `@${user.handle}`}</p>
                     </div>
-                 </Link>
+                 </button>
                ))
              ) : (
                <div className="p-4 text-center text-sm text-slate-500">Press enter to filter posts for "{searchQuery}"</div>
@@ -681,7 +793,7 @@ function Home({ currentUser }) {
         )}
       </div>
 
-      {/* CREATE POST BOX IN FEED */}
+      {/* CREATE POST BOX IN FEED (Hybrid Tags Array) */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0b1120]">
         <textarea 
           value={draft} onChange={(e) => setDraft(e.target.value)} 
@@ -689,15 +801,22 @@ function Home({ currentUser }) {
           className="min-h-[100px] w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white" 
         />
         
-        {draftTags.length > 0 && (
-          <div className="my-2 flex flex-wrap gap-2">
-             {draftTags.map(tag => (
-               <span key={tag} className="flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                 #{tag} <button onClick={() => setDraftTags(draftTags.filter(t => t !== tag))} className="hover:text-red-500"><X size={12}/></button>
-               </span>
-             ))}
-          </div>
-        )}
+        <div className="my-2 flex flex-wrap gap-2 items-center">
+           {draftTags.map(tag => (
+             <span key={tag} className="flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+               #{tag} <button onClick={() => setDraftTags(draftTags.filter(t => t !== tag))} className="hover:text-red-500"><X size={12}/></button>
+             </span>
+           ))}
+           {/* UNIFIED MANUAL TAG INPUT */}
+           <input 
+              type="text" 
+              value={manualTag} 
+              onChange={e => setManualTag(e.target.value)} 
+              onKeyDown={handleManualTagAdd} 
+              placeholder={draftTags.length === 0 ? "Type custom tag & press Enter..." : "+ custom tag"} 
+              className="bg-transparent text-xs outline-none text-slate-500 dark:text-slate-400 placeholder-slate-400 flex-1 min-w-[150px]"
+           />
+        </div>
 
         <div className="mt-2 mb-3">
           <label className="flex items-center gap-2 text-xs font-bold text-slate-500 mb-1"><CalendarClock size={14}/> Recruitment Deadline (Optional)</label>
@@ -724,19 +843,19 @@ function Home({ currentUser }) {
         </div>
       </div>
 
-      {/* DYNAMIC FEED FILTERS */}
+      {/* MULTI-SELECT DYNAMIC FEED FILTERS */}
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
         <button 
-           onClick={() => setActiveFilter('All')} 
-           className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${activeFilter === 'All' ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}
+           onClick={() => setActiveFilters([])} 
+           className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${activeFilters.length === 0 ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}
         >
           All
         </button>
         {userTags.map(tag => (
           <button 
              key={tag}
-             onClick={() => setActiveFilter(tag)} 
-             className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${activeFilter === tag ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.3)]' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}
+             onClick={() => toggleFilter(tag)} 
+             className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${activeFilters.includes(tag) ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.3)]' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}
           >
             {tag}
           </button>

@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Instant client-side session load
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
       try {
@@ -30,7 +31,6 @@ export function AuthProvider({ children }) {
       return userData; 
     },
     
-    // NEW: Function to instantly update profile photo & data across the app
     updateUser: (updates) => {
       setCurrentUser(prev => {
         const updatedUser = { ...prev, ...updates };

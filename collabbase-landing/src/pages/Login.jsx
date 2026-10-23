@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
-import { Github, Linkedin, LockKeyhole, Mail, Moon, Sun } from 'lucide-react';
+import { Github, Linkedin, LockKeyhole, Mail, Moon, Sun, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const socialLinks = [
@@ -22,11 +22,11 @@ function GoogleMark() {
 
 const Login = ({ isDarkMode, onToggleTheme, onSignedIn }) => {
   const [error, setError] = useState('');
-  const [isVerified, setIsVerified] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const handleGoogleSuccess = async (tokenResponse) => {
+    setIsAuthenticating(true);
     try {
-      // Direct backend call with token!
       const backendResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/google-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -37,14 +37,13 @@ const Login = ({ isDarkMode, onToggleTheme, onSignedIn }) => {
 
       if (!backendResponse.ok) {
         setError(data.error || 'Failed to connect to database.');
+        setIsAuthenticating(false);
         return;
       }
 
       setError('');
-      // NAYA: Secure Token save kar rahe hain aage Posts use karne ke liye
       localStorage.setItem('token', data.token); 
-      console.log('✅ Successfully saved to MongoDB:', data.user);
-
+      
       if (!data.user.isProfileComplete) {
         onSignedIn('onboarding', data.user); 
       } else {
@@ -54,12 +53,16 @@ const Login = ({ isDarkMode, onToggleTheme, onSignedIn }) => {
     } catch (err) {
       console.error(err);
       setError('Authentication failed. Please try again.');
+      setIsAuthenticating(false);
     }
   };
 
   const login = useGoogleLogin({
     onSuccess: handleGoogleSuccess,
-    onError: () => setError('Google sign-in was cancelled or could not be completed.'),
+    onError: () => {
+      setError('Google sign-in was cancelled or could not be completed.');
+      setIsAuthenticating(false);
+    },
   });
 
   return (
@@ -87,54 +90,65 @@ const Login = ({ isDarkMode, onToggleTheme, onSignedIn }) => {
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           className="w-full rounded-[20px] border border-white/75 bg-white/75 p-8 shadow-[0_24px_80px_-32px_rgba(15,23,42,0.24)] backdrop-blur-2xl dark:border-white/[0.09] dark:bg-slate-900/65 dark:shadow-[0_24px_90px_-32px_rgba(0,0,0,0.75)] sm:p-10"
         >
-          <div className="mb-8 flex justify-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-[18px] border border-blue-200/80 bg-gradient-to-br from-blue-50 to-indigo-100 text-blue-700 shadow-inner shadow-white/90 dark:border-blue-400/20 dark:from-blue-500/15 dark:to-indigo-400/10 dark:text-blue-300 dark:shadow-none">
-              <LockKeyhole size={23} strokeWidth={1.8} />
-            </div>
-          </div>
+          {isAuthenticating ? (
+             <div className="flex flex-col items-center justify-center py-8">
+                <Loader2 className="h-10 w-10 animate-spin text-blue-600 dark:text-blue-400 mb-4" />
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Preparing your workspace...</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 text-center">Authenticating securely with MITS servers.</p>
+             </div>
+          ) : (
+             <>
+                <div className="mb-8 flex justify-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-[18px] border border-blue-200/80 bg-gradient-to-br from-blue-50 to-indigo-100 text-blue-700 shadow-inner shadow-white/90 dark:border-blue-400/20 dark:from-blue-500/15 dark:to-indigo-400/10 dark:text-blue-300 dark:shadow-none">
+                    <LockKeyhole size={23} strokeWidth={1.8} />
+                  </div>
+                </div>
 
-          <div className="text-center">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-700 dark:text-blue-300">CollabBase · MITS Gwalior</p>
-            <h1 className="text-[25px] font-semibold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-[28px]">Sign in to your account</h1>
-            <p className="mx-auto mt-3 max-w-[330px] text-sm leading-6 text-slate-600 dark:text-slate-400">
-              Sign in with your institute Google account. Access is reserved for the MITS community.
-            </p>
-          </div>
+                <div className="text-center">
+                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-700 dark:text-blue-300">CollabBase · MITS Gwalior</p>
+                  <h1 className="text-[25px] font-semibold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-[28px]">Sign in to your account</h1>
+                  <p className="mx-auto mt-3 max-w-[330px] text-sm leading-6 text-slate-600 dark:text-slate-400">
+                    Sign in with your institute Google account. Access is reserved for the MITS community.
+                  </p>
+                </div>
 
-          <div className="mt-7 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-700/70 dark:bg-slate-950/35">
-            <p className="mb-3 text-xs font-medium text-slate-500 dark:text-slate-400">Supported institute emails</p>
-            <div className="flex flex-col gap-3 text-[13px] sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-              <p className="text-slate-800 dark:text-slate-200"><span className="font-medium">@mitsgwalior.in</span> <span className="text-slate-500 dark:text-slate-400">Faculty</span></p>
-              <span className="hidden h-4 w-px bg-slate-200 dark:bg-slate-700 sm:block" />
-              <p className="text-slate-800 dark:text-slate-200"><span className="font-medium">@mitsgwl.ac.in</span> <span className="text-slate-500 dark:text-slate-400">Students</span></p>
-            </div>
-          </div>
+                <div className="mt-7 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-700/70 dark:bg-slate-950/35">
+                  <p className="mb-3 text-xs font-medium text-slate-500 dark:text-slate-400">Supported institute emails</p>
+                  <div className="flex flex-col gap-3 text-[13px] sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                    <p className="text-slate-800 dark:text-slate-200"><span className="font-medium">@mitsgwalior.in</span> <span className="text-slate-500 dark:text-slate-400">Faculty</span></p>
+                    <span className="hidden h-4 w-px bg-slate-200 dark:bg-slate-700 sm:block" />
+                    <p className="text-slate-800 dark:text-slate-200"><span className="font-medium">@mitsgwl.ac.in</span> <span className="text-slate-500 dark:text-slate-400">Students</span></p>
+                  </div>
+                </div>
 
-          {error && (
-            <motion.p
-              role="alert"
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-center text-sm text-rose-700 dark:border-rose-400/25 dark:bg-rose-500/10 dark:text-rose-300"
-            >
-              {error}
-            </motion.p>
+                {error && (
+                  <motion.p
+                    role="alert"
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-center text-sm text-rose-700 dark:border-rose-400/25 dark:bg-rose-500/10 dark:text-rose-300"
+                  >
+                    {error}
+                  </motion.p>
+                )}
+
+                <motion.button
+                  type="button"
+                  onClick={() => {
+                    setError('');
+                    setIsAuthenticating(true);
+                    login();
+                  }}
+                  disabled={isAuthenticating}
+                  whileHover={!isAuthenticating ? { y: -2, boxShadow: '0 12px 28px rgba(15, 23, 42, 0.14)' } : {}}
+                  whileTap={!isAuthenticating ? { scale: 0.985 } : {}}
+                  className="mt-6 flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 disabled:opacity-70 dark:border-white/10 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+                >
+                  <GoogleMark />
+                  Sign in with Google
+                </motion.button>
+             </>
           )}
-
-          <motion.button
-            type="button"
-            onClick={() => {
-              setError('');
-              setIsVerified(false);
-              login();
-            }}
-            whileHover={{ y: -2, boxShadow: '0 12px 28px rgba(15, 23, 42, 0.14)' }}
-            whileTap={{ scale: 0.985 }}
-            className="mt-6 flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 dark:border-white/10 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
-          >
-            <GoogleMark />
-            Sign in with Google
-          </motion.button>
         </motion.section>
       </div>
     </main>
