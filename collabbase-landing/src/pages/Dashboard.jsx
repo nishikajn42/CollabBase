@@ -31,37 +31,53 @@ const normalizeTag = (tag) => tag ? tag.toLowerCase().replace(/[^a-z0-9]/g, '') 
 
 // UPGRADED AI TAG GENERATOR (With Cybersecurity & limited fallbacks)
 const simulateAITagGeneration = (text, existingTags = []) => {
-  const words = (text || "").toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/);
-  
-  const keywordMap = {
-    cybersecurity: 'CyberSecurity', security: 'InfoSec', hackathon: 'Hackathon', hacking: 'EthicalHacking',
-    react: 'ReactJS', frontend: 'Frontend', backend: 'Backend', node: 'NodeJS',
-    api: 'API', ml: 'MachineLearning', ai: 'ArtificialIntelligence', data: 'DataScience',
-    python: 'Python', web: 'WebDevelopment', ui: 'UIUX', ux: 'UIUX', design: 'Design',
-    mongo: 'MongoDB', javascript: 'JavaScript', java: 'Java', c: 'C++', cpp: 'C++',
-    project: 'ProjectWork', collab: 'Collaboration', app: 'AppDev', android: 'Android',
-    tailwindcss: 'TailwindCSS', express: 'ExpressJS', next: 'NextJS',
-    cloud: 'CloudComputing', aws: 'AWS', blockchain: 'Blockchain', web3: 'Web3'
-  };
+  if (!text) return [];
 
-  let matchedTags = [];
-  words.forEach(w => { if (keywordMap[w]) matchedTags.push(keywordMap[w]); });
-  
-  let uniqueNewTags = [...new Set(matchedTags)];
-  
-  // Agar koi match nahi mila, toh bas 2 random tags daalo (poori list nahi)
-  if (uniqueNewTags.length === 0) {
-    const fallbacks = ['Innovation', 'Developer', 'Coding', 'Tech', 'Student'];
-    const random1 = fallbacks[Math.floor(Math.random() * fallbacks.length)];
-    let random2 = fallbacks[Math.floor(Math.random() * fallbacks.length)];
-    while(random1 === random2) { random2 = fallbacks[Math.floor(Math.random() * fallbacks.length)]; }
-    uniqueNewTags = [random1, random2];
-  }
-  
+  // 1. Agar user ne khud post mein #hashtag lagaye hain, unko sabse pehle extract karo
+  const directHashtags = text.match(/#[\w]+/g) || [];
+  const cleanedDirect = directHashtags.map(t => t.replace('#', ''));
+
+  // 2. Stop Words (In faltu words ko tag nahi banana hai)
+  const stopWords = [
+    'is','am','are','the','and','of','to','in','for','with','on','a','an','at','by','from',
+    'this','that','it','we','you','they','my','our','your','looking','need','want','building',
+    'making','doing','help','someone','join','team','project','like','have','has','had','not',
+    'but','or','so','if','then','upcoming','together','passionate','ideas','reality','minds',
+    'come','right','let','lets','can','could','would','should','will','about','something'
+  ];
+
+  // 3. Text ko clean karo aur keywords nikalo
+  const words = text
+    .replace(/[^a-zA-Z0-9\s]/g, ' ') // Special characters hatao (emojis, etc)
+    .split(/\s+/) // Space ke basis par words tod do
+    .filter(w => w.length > 3) // 3 letter se chhote words ignore karo (jaise 'do', 'go')
+    .map(w => w.toLowerCase()) 
+    .filter(w => !stopWords.includes(w)); // Faltu stop words hata do
+
+  // 4. Word frequency count karo (Jo word zyada baar aaya wo important hai)
+  const freq = {};
+  words.forEach(w => freq[w] = (freq[w] || 0) + 1);
+
+  // 5. Top 4 most used/relevant words nikal lo aur unka First Letter Capital kar do
+  const topKeywords = Object.keys(freq)
+    .sort((a, b) => freq[b] - freq[a]) // Sort by frequency
+    .slice(0, 4) // Top 4 uthao
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1)); 
+
+  // Direct hashtags aur AI extracted keywords ko mila do
+  const allTags = [...cleanedDirect, ...topKeywords];
   const normalizedExisting = existingTags.map(normalizeTag);
-  return [...new Set(uniqueNewTags)].filter(t => !normalizedExisting.includes(normalizeTag(t))).slice(0, 4); 
-};
 
+  // Duplicates hatao aur sirf wahi bhejo jo existing tags mein nahi hain
+  const finalTags = [...new Set(allTags)]
+    .filter(t => !normalizedExisting.includes(normalizeTag(t)))
+    .slice(0, 5); // Max 5 tags per click
+
+  // Fallback agar text itna chota/ajeeb hai ki kuch na mile
+  if (finalTags.length === 0) return ['Collab', 'Innovation'];
+  
+  return finalTags;
+};
 
 // 1. POST CARD COMPONENT (Upgraded with Media display)
 function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
