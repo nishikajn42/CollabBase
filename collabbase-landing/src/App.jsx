@@ -7,19 +7,25 @@ import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
 import DashboardLayout from './layouts/DashboardLayout';
 
-// Wrapper component to handle routing logic smoothly
 function AppRoutes() {
   const { isAuthenticated, isLoading, currentUser: authUser, signIn } = useAuth();
+  const [activeTab, setActiveTab] = useState('home');
   const [isDarkMode, setIsDarkMode] = useState(() => window.localStorage.getItem('theme') === 'dark');
   
   const navigate = useNavigate();
   const location = useLocation();
   const activeUser = authUser;
 
-  // URL se active tab pata lagana taaki DashboardLayout ka sidemenu sahi highlight ho
-  let activeTab = 'home';
-  if (location.pathname.startsWith('/profile')) activeTab = 'profile';
-  if (location.pathname.startsWith('/messages')) activeTab = 'messages';
+  // URL ke hisaab se tab update karo (taaki search ki gayi profile properly open ho)
+  useEffect(() => {
+    if (location.pathname.includes('/profile')) {
+      setActiveTab('profile');
+    } else if (location.pathname.includes('/messages')) {
+      setActiveTab('messages');
+    } else if (location.pathname.includes('/dashboard')) {
+      setActiveTab('home');
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -32,79 +38,47 @@ function AppRoutes() {
   }, [isDarkMode]);
 
   const handleSignedIn = (page, userData) => {
-    signIn(userData); // Ye context aur LocalStorage dono me data save karega
+    signIn(userData); 
     navigate('/' + page);
   };
 
   const handleOnboardingComplete = (updatedUser) => {
-    signIn(updatedUser); // Ye ensure karega ki refresh karne par data na ude
+    signIn(updatedUser); 
     navigate('/dashboard');
+  };
+
+  // Custom tab switcher jo click karne par URL bhi change karega
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'home') navigate('/dashboard');
+    else if (tab === 'profile') navigate('/profile');
+    else if (tab === 'messages') navigate('/messages');
   };
 
   if (isLoading) return <div className="flex h-screen items-center justify-center text-slate-500">Loading CollabBase...</div>;
 
   return (
     <Routes>
-      <Route path="/" element={
-        activeUser ? <Navigate to="/dashboard" /> : (
-          <LandingPage
-            isDarkMode={isDarkMode}
-            onToggleTheme={() => setIsDarkMode((v) => !v)}
-            onSignIn={() => navigate('/login')}
-          />
-        )
-      } />
+      <Route path="/" element={ activeUser ? <Navigate to="/dashboard" /> : <LandingPage isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode((v) => !v)} onSignIn={() => navigate('/login')} /> } />
       
-      <Route path="/login" element={
-        <Login
-          isDarkMode={isDarkMode}
-          onToggleTheme={() => setIsDarkMode((v) => !v)}
-          onSignedIn={handleSignedIn}
-        />
-      } />
-
-      <Route path="/onboarding" element={
-        <Onboarding
-          user={activeUser}
-          isDarkMode={isDarkMode}
-          onComplete={handleOnboardingComplete}
-        />
-      } />
-
-      {/* --- EXPLICIT PROTECTED ROUTES --- */}
+      <Route path="/login" element={ <Login isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode((v) => !v)} onSignedIn={handleSignedIn} /> } />
       
-      <Route path="/dashboard" element={
+      <Route path="/onboarding" element={ <Onboarding user={activeUser} isDarkMode={isDarkMode} onComplete={handleOnboardingComplete} /> } />
+
+      {/* Wildcard Route: Ye akela route Dashboard, Messages aur Profile sabko handle karega */}
+      <Route path="/*" element={
         activeUser ? (
-          <DashboardLayout user={activeUser} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode((v) => !v)} activeTab="home">
-            <Dashboard activeTab="home" user={activeUser} />
+          <DashboardLayout 
+            user={activeUser} 
+            isDarkMode={isDarkMode} 
+            onToggleTheme={() => setIsDarkMode((v) => !v)} 
+            activeTab={activeTab} 
+            setActiveTab={handleTabChange}
+          >
+            <Dashboard activeTab={activeTab} user={activeUser} />
           </DashboardLayout>
         ) : <Navigate to="/" />
       } />
-
-      <Route path="/messages" element={
-        activeUser ? (
-          <DashboardLayout user={activeUser} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode((v) => !v)} activeTab="messages">
-            <Dashboard activeTab="messages" user={activeUser} />
-          </DashboardLayout>
-        ) : <Navigate to="/" />
-      } />
-
-      {/* Ye route doosre users ki profile open karne ke liye hai */}
-      <Route path="/profile/:handle" element={
-        activeUser ? (
-          <DashboardLayout user={activeUser} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode((v) => !v)} activeTab="profile">
-            <Dashboard activeTab="profile" user={activeUser} />
-          </DashboardLayout>
-        ) : <Navigate to="/" />
-      } />
-
-      {/* Ye route khud ki profile open karne ke liye hai */}
-      <Route path="/profile" element={
-        activeUser ? <Navigate to={`/profile/${activeUser.handle}`} /> : <Navigate to="/" />
-      } />
-
-      {/* Wildcard fallback - agar URL galat ho toh dashboard bhej do */}
-      <Route path="/*" element={ activeUser ? <Navigate to="/dashboard" /> : <Navigate to="/" /> } />
     </Routes>
   );
 }
