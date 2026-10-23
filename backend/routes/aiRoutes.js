@@ -1,45 +1,52 @@
 const express = require('express');
 const router = express.Router();
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-
-// Apna API key .env file se lo
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 router.post('/analyze-media', async (req, res) => {
   try {
     const { text, imageBase64 } = req.body;
-
-    // Gemini 1.5 Flash fast aur multimodal tasks ke liye best hai
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const apiKey = process.env.GEMINI_API_KEY;
 
     const prompt = `
       Analyze the provided image and text. 
       Generate exactly 5 highly relevant tech or hackathon related hashtags based on the content. 
       Do not include generic words like 'love', 'want', 'team'. Focus on technologies, domains (e.g., Cybersecurity, Web3, AI), and core themes.
       Return ONLY a comma-separated list of tags without the '#' symbol.
-      Text provided by user: "${text}"
+      Text provided by user: "${text || ''}"
     `;
 
-    const imageParts = [];
+    // Format data for direct API call
+    const parts = [{ text: prompt }];
+
     if (imageBase64) {
-      // Frontend se data:image/png;base64,... aayega, usko split karna padega
       const mimeType = imageBase64.substring(imageBase64.indexOf(":") + 1, imageBase64.indexOf(";"));
       const base64Data = imageBase64.split(",")[1];
       
-      imageParts.push({
-        inlineData: {
-          data: base64Data,
-          mimeType: mimeType
+      parts.push({
+        inline_data: {
+          mime_type: mimeType,
+          data: base64Data
         }
       });
     }
 
-    // Call Gemini API
-    const result = await model.generateContent([prompt, ...imageParts]);
-    const response = await result.response;
-    const aiText = response.text();
+    // Direct fetch call (Bypasses the buggy @google/generative-ai package completely)
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts }]
+      })
+    });
 
-    // Comma separated string ko array mein convert karo
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("Gemini API Error details:", data);
+      return res.status(500).json({ error: "API connection failed" });
+    }
+
+    // Extract text from API response
+    const aiText = data.candidates[0].content.parts[0].text;
     const tagsArray = aiText.split(',').map(tag => tag.trim().replace(/[^a-zA-Z0-9]/g, ''));
 
     res.json({ tags: tagsArray });
