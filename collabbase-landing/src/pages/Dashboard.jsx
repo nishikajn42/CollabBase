@@ -4,7 +4,8 @@ import {
   Edit3, Github, Linkedin, ExternalLink, Activity, 
   Send, Plus, Sparkles, MessageCircle, CalendarClock,
   Youtube, Globe, Camera, Image as ImageIcon, Video,
-  X, MessageSquareQuote, Search, BrainCircuit, AlertCircle, Cpu, ThumbsUp, MessageSquare, Share2, MoreVertical, Trash2, ArrowLeft, Info
+  X, MessageSquareQuote, Search, BrainCircuit, AlertCircle, Cpu, ThumbsUp, MessageSquare, Share2, MoreVertical, Trash2, ArrowLeft, Info,
+  Loader2 // NAYA: Loader2 import kiya for loading states
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; 
@@ -159,7 +160,7 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
 
         <p className="whitespace-pre-line text-base text-slate-800 dark:text-slate-100">{post.content}</p>
 
-        {/* NAYA: Display Image or Video if it exists */}
+        {/* Display Image or Video if it exists */}
         {post.media && (
           <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center">
             {post.media.startsWith('data:video') ? (
@@ -222,12 +223,13 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   const [ghLoading, setGhLoading] = useState(false);
   
   const [userPosts, setUserPosts] = useState([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(true); // NAYA: Profile Loading State
   
   // CREATE POST STATES
   const [draft, setDraft] = useState(''); 
   const [draftTags, setDraftTags] = useState([]); 
   const [draftDeadline, setDraftDeadline] = useState('');
-  const [postMedia, setPostMedia] = useState(null); // NAYA: Store image/video for post
+  const [postMedia, setPostMedia] = useState(null); // Store image/video for post
   const [isPosting, setIsPosting] = useState(false); 
   const [manualTag, setManualTag] = useState('');
 
@@ -255,10 +257,13 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   useEffect(() => {
     if (userData) {
       setEditForm(prev => ({ ...prev, tagline: userData.tagline || '', about: userData.about || '', githubUsername: userData.githubUsername || '' }));
+      
+      setIsLoadingPosts(true); // NAYA: Start loading
       fetch(`${import.meta.env.VITE_API_URL}/api/posts`)
         .then(res => res.json())
         .then(data => { if(!data.error) setUserPosts(data.filter(p => p.author?.handle === userData.handle)); })
-        .catch(console.error);
+        .catch(console.error)
+        .finally(() => setIsLoadingPosts(false)); // NAYA: Stop loading
     }
   }, [userData]);
 
@@ -313,7 +318,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/posts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        // NAYA: Send media in the body
+        // Send media in the body
         body: JSON.stringify({ content: draft, tags: draftTags, deadline: draftDeadline || null, media: postMedia })
       });
       if (response.ok) {
@@ -563,7 +568,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         </p>
       </div>
 
-      {/* POSTS */}
+      {/* POSTS WITH LOADING STATE */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-lg font-bold dark:text-white">Activity & Posts</h2>
@@ -573,7 +578,14 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
             </button>
           )}
         </div>
-        {userPosts.length > 0 ? (
+
+        {/* NAYA: Profile Posts Loading State */}
+        {isLoadingPosts ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 py-12 dark:border-slate-700">
+            <Loader2 className="animate-spin text-blue-500 mb-2" size={32} />
+            <p className="text-sm font-bold text-slate-500">Loading posts...</p>
+          </div>
+        ) : userPosts.length > 0 ? (
           userPosts.map((post) => (
             <BlueprintPostCard 
               key={post._id} 
@@ -665,7 +677,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                         className="min-h-[100px] w-full resize-none bg-transparent text-sm outline-none dark:text-white" 
                      />
                      
-                     {/* NAYA: Image/Video Preview */}
+                     {/* Image/Video Preview */}
                      {postMedia && (
                         <div className="relative mb-3 inline-block rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
                            {postMedia.startsWith('data:video') ? (
@@ -696,7 +708,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                      
                      <div className="mt-3 flex justify-between items-center border-t border-slate-200/50 pt-3">
                        <div className="flex gap-3 items-center">
-                         {/* NAYA: Image/Video Select Buttons */}
+                         {/* Image/Video Select Buttons */}
                          <label className="cursor-pointer text-slate-400 hover:text-blue-500 transition" title="Add Image">
                             <ImageIcon size={18} />
                             <input type="file" accept="image/*" className="hidden" onChange={(e) => {
@@ -774,19 +786,23 @@ function Home({ currentUser }) {
   const [manualTag, setManualTag] = useState('');
   
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeSearch, setActiveSearch] = useState(''); // NAYA: Track finalized search
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   
   const [posts, setPosts] = useState([]); 
+  const [isLoadingPosts, setIsLoadingPosts] = useState(true); // NAYA: Feed Loading State
   const [isPosting, setIsPosting] = useState(false);
   
   const [activeFilters, setActiveFilters] = useState([]);
 
   useEffect(() => {
+    setIsLoadingPosts(true); // NAYA: Start loading
     fetch(`${import.meta.env.VITE_API_URL}/api/posts`)
       .then(res => res.json())
       .then(data => { if(!data.error) setPosts(data); })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setIsLoadingPosts(false)); // NAYA: Stop loading
   }, []);
 
   useEffect(() => {
@@ -806,8 +822,12 @@ function Home({ currentUser }) {
   const userTags = Array.from(new Set([...(currentUser?.skills || []), ...(currentUser?.interests || [])]));
   
   const filteredPosts = posts.filter(post => {
-    const contentToSearch = post.content || '';
-    const matchesSearch = searchQuery ? contentToSearch.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+    // NAYA: Search Check
+    const searchToUse = activeSearch || searchQuery;
+    const contentToSearch = (post.content || '').toLowerCase();
+    const tagsToSearch = (post.tags || []).join(' ').toLowerCase();
+    const fullText = `${contentToSearch} ${tagsToSearch}`;
+    const matchesSearch = searchToUse ? fullText.includes(searchToUse.toLowerCase().replace('#', '')) : true;
     
     let matchesFilter = true;
     if (activeFilters.length > 0) {
@@ -872,11 +892,26 @@ function Home({ currentUser }) {
                setSearchQuery(e.target.value);
                setShowSearchDropdown(e.target.value.length > 1);
             }}
+            // NAYA: Enter key logic added
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                setActiveSearch(searchQuery);
+                setShowSearchDropdown(false);
+              }
+            }}
             onFocus={() => { if (searchQuery.length > 1) setShowSearchDropdown(true) }}
             onBlur={() => setTimeout(() => setShowSearchDropdown(false), 200)}
             className="w-full bg-transparent text-sm outline-none dark:text-white" 
           />
-          {searchQuery && <button onClick={() => { setSearchQuery(''); setShowSearchDropdown(false); }} className="mr-2 text-xs font-bold text-slate-400">Clear</button>}
+          {searchQuery && (
+            <button 
+              onClick={() => { setSearchQuery(''); setActiveSearch(''); setShowSearchDropdown(false); }} 
+              className="mr-2 text-xs font-bold text-slate-400"
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {showSearchDropdown && searchQuery && (
@@ -908,95 +943,123 @@ function Home({ currentUser }) {
         )}
       </div>
 
-      {/* CREATE POST BOX IN FEED */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0b1120]">
-        <textarea 
-          value={draft} onChange={(e) => setDraft(e.target.value)} 
-          placeholder="Need a teammate? Describe your project..." 
-          className="min-h-[100px] w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white" 
-        />
-        
-        {/* NAYA: Image/Video Preview */}
-        {postMedia && (
-           <div className="relative mb-3 inline-block rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
-              {postMedia.startsWith('data:video') ? (
-                <video src={postMedia} className="h-32 object-cover" />
-              ) : (
-                <img src={postMedia} alt="Upload preview" className="h-32 object-cover" />
-              )}
-              <button onClick={() => setPostMedia(null)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-red-500"><X size={14}/></button>
-           </div>
-        )}
+      {/* NAYA: Active Search Banner with Back Button */}
+      {activeSearch && (
+         <div className="flex items-center justify-between rounded-xl bg-blue-50 border border-blue-100 p-4 dark:bg-blue-900/20 dark:border-blue-800/50">
+            <div className="flex items-center gap-2">
+               <Search size={18} className="text-blue-500" />
+               <span className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                 Showing results for <span className="font-bold text-blue-600 dark:text-blue-400">"{activeSearch}"</span>
+               </span>
+            </div>
+            <button 
+              onClick={() => { setActiveSearch(''); setSearchQuery(''); }} 
+              className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400"
+            >
+               <ArrowLeft size={14}/> Back to Feed
+            </button>
+         </div>
+      )}
 
-        <div className="my-2 flex flex-wrap gap-2 items-center">
-           {draftTags.map(tag => (
-             <span key={tag} className="flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-               #{tag} <button onClick={() => setDraftTags(draftTags.filter(t => t !== tag))} className="hover:text-red-500"><X size={12}/></button>
-             </span>
-           ))}
-           <input 
-              type="text" 
-              value={manualTag} 
-              onChange={e => setManualTag(e.target.value)} 
-              onKeyDown={handleManualTagAdd} 
-              placeholder={draftTags.length === 0 ? "Type custom tag & press Enter..." : "+ custom tag"} 
-              className="bg-transparent text-xs outline-none text-slate-500 dark:text-slate-400 placeholder-slate-400 flex-1 min-w-[150px]"
-           />
-        </div>
-
-        <div className="mt-2 mb-3">
-          <label className="flex items-center gap-2 text-xs font-bold text-slate-500 mb-1"><CalendarClock size={14}/> Recruitment Deadline (Optional)</label>
-          <input type="datetime-local" value={draftDeadline} onChange={(e) => setDraftDeadline(e.target.value)} className="w-full rounded-lg border border-slate-200 p-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"/>
-        </div>
-
-        <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
-          <div className="flex gap-3 items-center">
-             {/* NAYA: Select Image/Video */}
-             <label className="cursor-pointer text-slate-400 hover:text-blue-500 transition" title="Add Image">
-                <ImageIcon size={18} />
-                <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                   const f = e.target.files[0];
-                   if(f) { const r = new FileReader(); r.onloadend = () => setPostMedia(r.result); r.readAsDataURL(f); }
-                }}/>
-             </label>
-             <label className="cursor-pointer text-slate-400 hover:text-blue-500 transition" title="Add Video">
-                <Video size={18} />
-                <input type="file" accept="video/*" className="hidden" onChange={(e) => {
-                   const f = e.target.files[0];
-                   if(f) { const r = new FileReader(); r.onloadend = () => setPostMedia(r.result); r.readAsDataURL(f); }
-                }}/>
-             </label>
-
-             <button type="button" onClick={() => setDraftTags([...draftTags, ...simulateAITagGeneration(draft, draftTags)])} disabled={!draft.trim()} className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 ml-2"><BrainCircuit size={14}/> AI Tag</button>
-          </div>
+      {/* CREATE POST BOX IN FEED (Hidden when searching) */}
+      {!activeSearch && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0b1120]">
+          <textarea 
+            value={draft} onChange={(e) => setDraft(e.target.value)} 
+            placeholder="Need a teammate? Describe your project..." 
+            className="min-h-[100px] w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white" 
+          />
           
-          <button onClick={handleCreatePost} disabled={(!draft.trim() && !postMedia) || isPosting} className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
-            <Send size={14}/> {isPosting ? 'Posting...' : 'Post'}
-          </button>
+          {/* NAYA: Image/Video Preview */}
+          {postMedia && (
+             <div className="relative mb-3 inline-block rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
+                {postMedia.startsWith('data:video') ? (
+                  <video src={postMedia} className="h-32 object-cover" />
+                ) : (
+                  <img src={postMedia} alt="Upload preview" className="h-32 object-cover" />
+                )}
+                <button onClick={() => setPostMedia(null)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-red-500"><X size={14}/></button>
+             </div>
+          )}
+
+          <div className="my-2 flex flex-wrap gap-2 items-center">
+             {draftTags.map(tag => (
+               <span key={tag} className="flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                 #{tag} <button onClick={() => setDraftTags(draftTags.filter(t => t !== tag))} className="hover:text-red-500"><X size={12}/></button>
+               </span>
+             ))}
+             <input 
+                type="text" 
+                value={manualTag} 
+                onChange={e => setManualTag(e.target.value)} 
+                onKeyDown={handleManualTagAdd} 
+                placeholder={draftTags.length === 0 ? "Type custom tag & press Enter..." : "+ custom tag"} 
+                className="bg-transparent text-xs outline-none text-slate-500 dark:text-slate-400 placeholder-slate-400 flex-1 min-w-[150px]"
+             />
+          </div>
+
+          <div className="mt-2 mb-3">
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-500 mb-1"><CalendarClock size={14}/> Recruitment Deadline (Optional)</label>
+            <input type="datetime-local" value={draftDeadline} onChange={(e) => setDraftDeadline(e.target.value)} className="w-full rounded-lg border border-slate-200 p-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"/>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
+            <div className="flex gap-3 items-center">
+               {/* NAYA: Select Image/Video */}
+               <label className="cursor-pointer text-slate-400 hover:text-blue-500 transition" title="Add Image">
+                  <ImageIcon size={18} />
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                     const f = e.target.files[0];
+                     if(f) { const r = new FileReader(); r.onloadend = () => setPostMedia(r.result); r.readAsDataURL(f); }
+                  }}/>
+               </label>
+               <label className="cursor-pointer text-slate-400 hover:text-blue-500 transition" title="Add Video">
+                  <Video size={18} />
+                  <input type="file" accept="video/*" className="hidden" onChange={(e) => {
+                     const f = e.target.files[0];
+                     if(f) { const r = new FileReader(); r.onloadend = () => setPostMedia(r.result); r.readAsDataURL(f); }
+                  }}/>
+               </label>
+
+               <button type="button" onClick={() => setDraftTags([...draftTags, ...simulateAITagGeneration(draft, draftTags)])} disabled={!draft.trim()} className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 ml-2"><BrainCircuit size={14}/> AI Tag</button>
+            </div>
+            
+            <button onClick={handleCreatePost} disabled={(!draft.trim() && !postMedia) || isPosting} className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+              <Send size={14}/> {isPosting ? 'Posting...' : 'Post'}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* MULTI-SELECT DYNAMIC FEED FILTERS */}
-      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-        <button 
-           onClick={() => setActiveFilters([])} 
-           className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${activeFilters.length === 0 ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}
-        >
-          All
-        </button>
-        {userTags.map(tag => (
+      {/* MULTI-SELECT DYNAMIC FEED FILTERS (Hidden when searching) */}
+      {!activeSearch && (
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           <button 
-             key={tag}
-             onClick={() => toggleFilter(tag)} 
-             className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${activeFilters.includes(tag) ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.3)]' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}
+             onClick={() => setActiveFilters([])} 
+             className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${activeFilters.length === 0 ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}
           >
-            {tag}
+            All
           </button>
-        ))}
-      </div>
+          {userTags.map(tag => (
+            <button 
+               key={tag}
+               onClick={() => toggleFilter(tag)} 
+               className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${activeFilters.includes(tag) ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.3)]' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}
+            >
+               {tag}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* Render Posts */}
-      {filteredPosts.length > 0 ? (
+      {/* Render Posts (With Loader) */}
+      {isLoadingPosts ? (
+        <div className="flex flex-col items-center justify-center py-20">
+           <Loader2 className="animate-spin text-blue-500 mb-4" size={40} />
+           <h3 className="font-bold text-slate-700 dark:text-slate-300">Loading your feed...</h3>
+           <p className="text-xs text-slate-500 mt-1">Fetching latest posts.</p>
+        </div>
+      ) : filteredPosts.length > 0 ? (
         filteredPosts.map(post => (
           <BlueprintPostCard 
             key={post._id} 
@@ -1006,10 +1069,22 @@ function Home({ currentUser }) {
           />
         ))
       ) : (
-        <div className="text-center py-20">
+        <div className="text-center py-20 bg-white dark:bg-[#0b1120] rounded-2xl border border-slate-200 dark:border-slate-800">
           <AlertCircle size={48} className="mx-auto text-slate-300 mb-4" />
-          <h3 className="font-bold dark:text-white">No posts found</h3>
-          <p className="text-sm text-slate-500 mt-2">Try selecting a different filter or search query.</p>
+          <h3 className="font-bold dark:text-white">
+            {activeSearch ? `No posts found for "${activeSearch}"` : 'No posts found'}
+          </h3>
+          <p className="text-sm text-slate-500 mt-2 mb-4">
+            {activeSearch ? 'Try searching for a different tag or keyword.' : 'Be the first to post something!'}
+          </p>
+          {activeSearch && (
+             <button 
+               onClick={() => { setActiveSearch(''); setSearchQuery(''); }} 
+               className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-blue-700"
+             >
+               Clear Search & Go Back
+             </button>
+          )}
         </div>
       )}
     </div>
