@@ -35,8 +35,9 @@ const userSchema = new mongoose.Schema({
   givenFeedbacks: { type: Array, default: [] },
   receivedFeedbacks: { type: Array, default: [] },
   
-  skills: { type: Array, default: [] },
-  interests: { type: Array, default: [] },
+  skills: [{ type: String }],
+  interests: [{ type: String }],
+  githubUsername: { type: String, default: "" },
 
   links: [linkSchema],
   
