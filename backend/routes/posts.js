@@ -13,6 +13,7 @@ const isValidDeadline = deadline =>
     !Number.isNaN(new Date(deadline).getTime())
   );
 
+// FETCH POSTS
 router.get('/', async (req, res) => {
   try {
     const posts = await Post.find()
@@ -26,24 +27,27 @@ router.get('/', async (req, res) => {
   }
 });
 
+// CREATE POST (FIXED: Added media & relaxed text validation)
 router.post('/', requireAuth, async (req, res) => {
-  const { content, tags, deadline } = req.body;
+  const { content, tags, deadline, media } = req.body; // MEDIA EXTRACT KIYA
 
-  if (typeof content !== 'string' || !content.trim()) {
-    return res.status(400).json({ error: 'Post content is required.' });
+  // Validation: Post mein ya toh Text hona chahiye ya Media
+  if ((!content || !content.trim()) && !media) {
+    return res.status(400).json({ error: 'Post must contain text or media.' });
   }
 
-  if (!isValidTags(tags)) {
+  if (tags && !isValidTags(tags)) {
     return res.status(400).json({ error: 'Post tags must be an array of strings.' });
   }
 
-  if (!isValidDeadline(deadline)) {
+  if (deadline && !isValidDeadline(deadline)) {
     return res.status(400).json({ error: 'Post deadline must be a valid date.' });
   }
 
   try {
     const post = await Post.create({
-      content: content.trim(),
+      content: content ? content.trim() : '', 
+      media: media || null, // MEDIA SAVE KIYA
       tags: tags || [],
       ...(deadline ? { deadline: new Date(deadline) } : {}),
       author: req.user._id,
@@ -57,36 +61,26 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
+// UPDATE POST (FIXED: Added media)
 router.put('/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
-  const { content, tags, deadline } = req.body;
+  const { content, tags, deadline, media } = req.body;
 
   if (!isValidPostId(id)) {
     return res.status(400).json({ error: 'Invalid post ID.' });
   }
 
-  if (content !== undefined && (typeof content !== 'string' || !content.trim())) {
-    return res.status(400).json({ error: 'Post content cannot be empty.' });
-  }
-
-  if (!isValidTags(tags)) {
-    return res.status(400).json({ error: 'Post tags must be an array of strings.' });
-  }
-
-  if (!isValidDeadline(deadline)) {
-    return res.status(400).json({ error: 'Post deadline must be a valid date.' });
+  if (!content && !media) {
+    return res.status(400).json({ error: 'Provide content or media to update.' });
   }
 
   const updates = {};
   if (content !== undefined) updates.content = content.trim();
+  if (media !== undefined) updates.media = media;
   if (tags !== undefined) updates.tags = tags;
   if (deadline !== undefined) {
     if (deadline === null) updates.deadline = undefined;
     else updates.deadline = new Date(deadline);
-  }
-
-  if (Object.keys(updates).length === 0) {
-    return res.status(400).json({ error: 'Provide content, tags, or deadline to update.' });
   }
 
   try {
@@ -108,6 +102,7 @@ router.put('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// DELETE POST
 router.delete('/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   if (!isValidPostId(id)) {
@@ -132,6 +127,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// SHARE POST
 router.put('/:id/share', async (req, res) => {
   const { id } = req.params;
   if (!isValidPostId(id)) {

@@ -5,7 +5,7 @@ import {
   Send, Plus, Sparkles, MessageCircle, CalendarClock,
   Youtube, Globe, Camera, Image as ImageIcon, Video,
   X, MessageSquareQuote, Search, BrainCircuit, AlertCircle, Cpu, ThumbsUp, MessageSquare, Share2, MoreVertical, Trash2, ArrowLeft, Info,
-  Loader2 // NAYA: Loader2 import kiya for loading states
+  Loader2 
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; 
@@ -30,63 +30,13 @@ const getCoderBadge = (langs) => langs?.length > 0 ? `${langs[0].name} Developer
 
 const normalizeTag = (tag) => tag ? tag.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
 
-// UPGRADED AI TAG GENERATOR (With Cybersecurity & limited fallbacks)
-const simulateAITagGeneration = (text, existingTags = []) => {
-  if (!text) return [];
-
-  // 1. Agar user ne khud post mein #hashtag lagaye hain, unko sabse pehle extract karo
-  const directHashtags = text.match(/#[\w]+/g) || [];
-  const cleanedDirect = directHashtags.map(t => t.replace('#', ''));
-
-  // 2. Stop Words (In faltu words ko tag nahi banana hai)
-  const stopWords = [
-    'is','am','are','the','and','of','to','in','for','with','on','a','an','at','by','from',
-    'this','that','it','we','you','they','my','our','your','looking','need','want','building',
-    'making','doing','help','someone','join','team','project','like','have','has','had','not',
-    'but','or','so','if','then','upcoming','together','passionate','ideas','reality','minds',
-    'come','right','let','lets','can','could','would','should','will','about','something'
-  ];
-
-  // 3. Text ko clean karo aur keywords nikalo
-  const words = text
-    .replace(/[^a-zA-Z0-9\s]/g, ' ') // Special characters hatao (emojis, etc)
-    .split(/\s+/) // Space ke basis par words tod do
-    .filter(w => w.length > 3) // 3 letter se chhote words ignore karo (jaise 'do', 'go')
-    .map(w => w.toLowerCase()) 
-    .filter(w => !stopWords.includes(w)); // Faltu stop words hata do
-
-  // 4. Word frequency count karo (Jo word zyada baar aaya wo important hai)
-  const freq = {};
-  words.forEach(w => freq[w] = (freq[w] || 0) + 1);
-
-  // 5. Top 4 most used/relevant words nikal lo aur unka First Letter Capital kar do
-  const topKeywords = Object.keys(freq)
-    .sort((a, b) => freq[b] - freq[a]) // Sort by frequency
-    .slice(0, 4) // Top 4 uthao
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1)); 
-
-  // Direct hashtags aur AI extracted keywords ko mila do
-  const allTags = [...cleanedDirect, ...topKeywords];
-  const normalizedExisting = existingTags.map(normalizeTag);
-
-  // Duplicates hatao aur sirf wahi bhejo jo existing tags mein nahi hain
-  const finalTags = [...new Set(allTags)]
-    .filter(t => !normalizedExisting.includes(normalizeTag(t)))
-    .slice(0, 5); // Max 5 tags per click
-
-  // Fallback agar text itna chota/ajeeb hai ki kuch na mile
-  if (finalTags.length === 0) return ['Collab', 'Innovation'];
-  
-  return finalTags;
-};
-
-// 1. POST CARD COMPONENT (Upgraded with Media display)
+// 1. POST CARD COMPONENT
 function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
   const authorName = post.author?.fullName || 'User';
   const authorHandle = post.author?.handle || 'user';
   const authorPic = post.author?.profilePicture;
   
-  const isAuthor = currentUser?.handle === authorHandle;
+  const isAuthor = currentUser?.handle === authorHandle || post.author === currentUser?._id;
   const [shareCount, setShareCount] = useState(post.shareCount || 0);
   const [showOptions, setShowOptions] = useState(false);
 
@@ -160,7 +110,6 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
 
         <p className="whitespace-pre-line text-base text-slate-800 dark:text-slate-100">{post.content}</p>
 
-        {/* Display Image or Video if it exists */}
         {post.media && (
           <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center">
             {post.media.startsWith('data:video') ? (
@@ -223,15 +172,15 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   const [ghLoading, setGhLoading] = useState(false);
   
   const [userPosts, setUserPosts] = useState([]);
-  const [isLoadingPosts, setIsLoadingPosts] = useState(true); // NAYA: Profile Loading State
+  const [isLoadingPosts, setIsLoadingPosts] = useState(true); 
   
-  // CREATE POST STATES
   const [draft, setDraft] = useState(''); 
   const [draftTags, setDraftTags] = useState([]); 
   const [draftDeadline, setDraftDeadline] = useState('');
-  const [postMedia, setPostMedia] = useState(null); // Store image/video for post
+  const [postMedia, setPostMedia] = useState(null); 
   const [isPosting, setIsPosting] = useState(false); 
   const [manualTag, setManualTag] = useState('');
+  const [isAILoading, setIsAILoading] = useState(false); // REAL AI LOADER STATE
 
   const [editForm, setEditForm] = useState({ tagline: '', about: '', newLinkTitle: '', newLinkUrl: '', githubUsername: '', newSkill: '', newInterest: '' });
   
@@ -258,12 +207,21 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
     if (userData) {
       setEditForm(prev => ({ ...prev, tagline: userData.tagline || '', about: userData.about || '', githubUsername: userData.githubUsername || '' }));
       
-      setIsLoadingPosts(true); // NAYA: Start loading
-      fetch(`${import.meta.env.VITE_API_URL}/api/posts`)
+      setIsLoadingPosts(true); 
+      const token = localStorage.getItem('token'); 
+      
+      fetch(`${import.meta.env.VITE_API_URL}/api/posts`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {} 
+      })
         .then(res => res.json())
-        .then(data => { if(!data.error) setUserPosts(data.filter(p => p.author?.handle === userData.handle)); })
+        .then(data => {
+          if(!data.error) {
+            const postsArray = Array.isArray(data) ? data : (data.posts || []); 
+            setUserPosts(postsArray.filter(p => p.author?.handle === userData.handle || p.author?._id === userData._id || p.author === userData._id));
+          } 
+        })
         .catch(console.error)
-        .finally(() => setIsLoadingPosts(false)); // NAYA: Stop loading
+        .finally(() => setIsLoadingPosts(false)); 
     }
   }, [userData]);
 
@@ -309,6 +267,39 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
     else handleSaveProfile({ [field]: userData[field].filter(item => item !== itemToRemove) });
   };
 
+  // REAL AI TAG GENERATOR FUNCTION
+  const handleAITagClick = async () => {
+    if (!draft.trim() && !postMedia) return;
+    setIsAILoading(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/analyze-media`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ text: draft, imageBase64: postMedia })
+      });
+
+      const data = await response.json();
+      
+      if (data.tags && Array.isArray(data.tags)) {
+        const combinedTags = [...draftTags, ...data.tags];
+        const uniqueTags = combinedTags.filter((val, idx, arr) => 
+          arr.findIndex(t => t.toLowerCase() === val.toLowerCase()) === idx
+        );
+        setDraftTags(uniqueTags);
+      } else {
+        alert("AI could not generate tags for this content.");
+      }
+    } catch (error) {
+      console.error("AI Tag generation failed:", error);
+      alert("Failed to connect to AI server.");
+    } finally {
+      setIsAILoading(false);
+    }
+  };
+
   const handleCreatePost = async () => {
     if (!draft.trim() && !postMedia) return;
     if (isPosting) return;
@@ -318,7 +309,6 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/posts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        // Send media in the body
         body: JSON.stringify({ content: draft, tags: draftTags, deadline: draftDeadline || null, media: postMedia })
       });
       if (response.ok) {
@@ -579,7 +569,6 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
           )}
         </div>
 
-        {/* NAYA: Profile Posts Loading State */}
         {isLoadingPosts ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 py-12 dark:border-slate-700">
             <Loader2 className="animate-spin text-blue-500 mb-2" size={32} />
@@ -623,7 +612,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         )}
       </div>
 
-      {/* GIVEN FEEDBACK SECTION (WITH DELETE OPTION) */}
+      {/* GIVEN FEEDBACK SECTION */}
       {isOwnProfile && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
             <h2 className="mb-4 flex items-center gap-2 text-lg font-bold dark:text-white"><ThumbsUp size={18} className="text-blue-500" /> Feedback Given</h2>
@@ -677,7 +666,6 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                         className="min-h-[100px] w-full resize-none bg-transparent text-sm outline-none dark:text-white" 
                      />
                      
-                     {/* Image/Video Preview */}
                      {postMedia && (
                         <div className="relative mb-3 inline-block rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
                            {postMedia.startsWith('data:video') ? (
@@ -708,7 +696,6 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                      
                      <div className="mt-3 flex justify-between items-center border-t border-slate-200/50 pt-3">
                        <div className="flex gap-3 items-center">
-                         {/* Image/Video Select Buttons */}
                          <label className="cursor-pointer text-slate-400 hover:text-blue-500 transition" title="Add Image">
                             <ImageIcon size={18} />
                             <input type="file" accept="image/*" className="hidden" onChange={(e) => {
@@ -724,7 +711,16 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                             }}/>
                          </label>
 
-                         <button type="button" onClick={() => setDraftTags([...draftTags, ...simulateAITagGeneration(draft, draftTags)])} disabled={!draft.trim()} className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 ml-2"><BrainCircuit size={14}/> AI Tag</button>
+                         {/* REAL AI TAG BUTTON */}
+                         <button 
+                           type="button" 
+                           onClick={handleAITagClick} 
+                           disabled={(!draft.trim() && !postMedia) || isAILoading} 
+                           className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 ml-2 hover:bg-purple-100 transition-colors"
+                         >
+                           {isAILoading ? <Loader2 size={14} className="animate-spin" /> : <BrainCircuit size={14}/>}
+                           {isAILoading ? 'Analyzing...' : 'AI Tag'}
+                         </button>
                        </div>
                        
                        <button onClick={handleCreatePost} disabled={(!draft.trim() && !postMedia) || isPosting} className="flex items-center gap-1.5 bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-bold disabled:opacity-50"><Send size={14}/> Post</button>
@@ -776,33 +772,43 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   );
 }
 
-// 3. HOME FEED COMPONENT (Update to add media logic)
+// 3. HOME FEED COMPONENT
 function Home({ currentUser }) {
   const navigate = useNavigate();
   const [draft, setDraft] = useState('');
   const [draftTags, setDraftTags] = useState([]);
   const [draftDeadline, setDraftDeadline] = useState('');
-  const [postMedia, setPostMedia] = useState(null); // NAYA
+  const [postMedia, setPostMedia] = useState(null); 
   const [manualTag, setManualTag] = useState('');
+  const [isAILoading, setIsAILoading] = useState(false); // REAL AI LOADER STATE
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeSearch, setActiveSearch] = useState(''); // NAYA: Track finalized search
+  const [activeSearch, setActiveSearch] = useState(''); 
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   
   const [posts, setPosts] = useState([]); 
-  const [isLoadingPosts, setIsLoadingPosts] = useState(true); // NAYA: Feed Loading State
+  const [isLoadingPosts, setIsLoadingPosts] = useState(true); 
   const [isPosting, setIsPosting] = useState(false);
   
   const [activeFilters, setActiveFilters] = useState([]);
 
   useEffect(() => {
-    setIsLoadingPosts(true); // NAYA: Start loading
-    fetch(`${import.meta.env.VITE_API_URL}/api/posts`)
+    setIsLoadingPosts(true); 
+    const token = localStorage.getItem('token'); 
+    
+    fetch(`${import.meta.env.VITE_API_URL}/api/posts`, {
+       headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    })
       .then(res => res.json())
-      .then(data => { if(!data.error) setPosts(data); })
+      .then(data => {
+         if(!data.error) {
+            const postsArray = Array.isArray(data) ? data : (data.posts || []); 
+            setPosts(postsArray); 
+         } 
+      })
       .catch(console.error)
-      .finally(() => setIsLoadingPosts(false)); // NAYA: Stop loading
+      .finally(() => setIsLoadingPosts(false)); 
   }, []);
 
   useEffect(() => {
@@ -822,7 +828,6 @@ function Home({ currentUser }) {
   const userTags = Array.from(new Set([...(currentUser?.skills || []), ...(currentUser?.interests || [])]));
   
   const filteredPosts = posts.filter(post => {
-    // NAYA: Search Check
     const searchToUse = activeSearch || searchQuery;
     const contentToSearch = (post.content || '').toLowerCase();
     const tagsToSearch = (post.tags || []).join(' ').toLowerCase();
@@ -845,6 +850,39 @@ function Home({ currentUser }) {
     }
   };
 
+  // REAL AI TAG GENERATOR FUNCTION
+  const handleAITagClick = async () => {
+    if (!draft.trim() && !postMedia) return;
+    setIsAILoading(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/analyze-media`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ text: draft, imageBase64: postMedia })
+      });
+
+      const data = await response.json();
+      
+      if (data.tags && Array.isArray(data.tags)) {
+        const combinedTags = [...draftTags, ...data.tags];
+        const uniqueTags = combinedTags.filter((val, idx, arr) => 
+          arr.findIndex(t => t.toLowerCase() === val.toLowerCase()) === idx
+        );
+        setDraftTags(uniqueTags);
+      } else {
+        alert("AI could not generate tags for this content.");
+      }
+    } catch (error) {
+      console.error("AI Tag generation failed:", error);
+      alert("Failed to connect to AI server.");
+    } finally {
+      setIsAILoading(false);
+    }
+  };
+
   const handleCreatePost = async () => {
     if (!draft.trim() && !postMedia) return;
     if (isPosting) return;
@@ -855,7 +893,7 @@ function Home({ currentUser }) {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/posts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ content: draft, tags: draftTags, deadline: draftDeadline || null, media: postMedia }) // NAYA
+        body: JSON.stringify({ content: draft, tags: draftTags, deadline: draftDeadline || null, media: postMedia }) 
       });
   
       if (response.ok) {
@@ -892,7 +930,6 @@ function Home({ currentUser }) {
                setSearchQuery(e.target.value);
                setShowSearchDropdown(e.target.value.length > 1);
             }}
-            // NAYA: Enter key logic added
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -943,7 +980,7 @@ function Home({ currentUser }) {
         )}
       </div>
 
-      {/* NAYA: Active Search Banner with Back Button */}
+      {/* Active Search Banner */}
       {activeSearch && (
          <div className="flex items-center justify-between rounded-xl bg-blue-50 border border-blue-100 p-4 dark:bg-blue-900/20 dark:border-blue-800/50">
             <div className="flex items-center gap-2">
@@ -961,7 +998,7 @@ function Home({ currentUser }) {
          </div>
       )}
 
-      {/* CREATE POST BOX IN FEED (Hidden when searching) */}
+      {/* CREATE POST BOX IN FEED */}
       {!activeSearch && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0b1120]">
           <textarea 
@@ -970,7 +1007,6 @@ function Home({ currentUser }) {
             className="min-h-[100px] w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white" 
           />
           
-          {/* NAYA: Image/Video Preview */}
           {postMedia && (
              <div className="relative mb-3 inline-block rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
                 {postMedia.startsWith('data:video') ? (
@@ -1005,7 +1041,6 @@ function Home({ currentUser }) {
 
           <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
             <div className="flex gap-3 items-center">
-               {/* NAYA: Select Image/Video */}
                <label className="cursor-pointer text-slate-400 hover:text-blue-500 transition" title="Add Image">
                   <ImageIcon size={18} />
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => {
@@ -1021,7 +1056,16 @@ function Home({ currentUser }) {
                   }}/>
                </label>
 
-               <button type="button" onClick={() => setDraftTags([...draftTags, ...simulateAITagGeneration(draft, draftTags)])} disabled={!draft.trim()} className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 ml-2"><BrainCircuit size={14}/> AI Tag</button>
+               {/* REAL AI TAG BUTTON */}
+               <button 
+                 type="button" 
+                 onClick={handleAITagClick} 
+                 disabled={(!draft.trim() && !postMedia) || isAILoading} 
+                 className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 ml-2 hover:bg-purple-100 transition-colors"
+               >
+                 {isAILoading ? <Loader2 size={14} className="animate-spin" /> : <BrainCircuit size={14}/>}
+                 {isAILoading ? 'Analyzing...' : 'AI Tag'}
+               </button>
             </div>
             
             <button onClick={handleCreatePost} disabled={(!draft.trim() && !postMedia) || isPosting} className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
@@ -1031,7 +1075,7 @@ function Home({ currentUser }) {
         </div>
       )}
 
-      {/* MULTI-SELECT DYNAMIC FEED FILTERS (Hidden when searching) */}
+      {/* MULTI-SELECT DYNAMIC FEED FILTERS */}
       {!activeSearch && (
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           <button 
