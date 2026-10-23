@@ -7,16 +7,31 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Instant client-side session load
+    // 1. Instant load from local storage
     const savedUser = localStorage.getItem('user');
+    const token = localStorage.getItem('token');
+    
     if (savedUser) {
-      try {
-        setCurrentUser(JSON.parse(savedUser));
-      } catch (error) {
-        console.error("Error reading user data", error);
-      }
+      try { setCurrentUser(JSON.parse(savedUser)); } catch (error) { console.error(error); }
     }
-    setIsLoading(false);
+
+    // 2. BACKGROUND SYNC: Always fetch latest DB data to prevent Phone/Laptop mismatch
+    if (token) {
+      fetch(`${import.meta.env.VITE_API_URL}/api/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(latestUser => {
+        if (!latestUser.error) {
+          setCurrentUser(latestUser);
+          localStorage.setItem('user', JSON.stringify(latestUser));
+        }
+      })
+      .catch(err => console.error("Sync error:", err))
+      .finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
   const value = useMemo(() => ({

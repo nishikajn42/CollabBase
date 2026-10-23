@@ -1,11 +1,35 @@
 const mongoose = require('mongoose');
 
 const postSchema = new mongoose.Schema({
-  content: { type: String, required: true, trim: true },
-  tags: [{ type: String, trim: true }],
-  author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  shareCount: { type: Number, default: 0 },
-  deadline: { type: Date } // Naya field for recruitment deadline
-}, { timestamps: true });
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  content: {
+    type: String,
+    required: true
+  },
+  tags: [{
+    type: String
+  }],
+  deadline: {
+    type: Date,
+    default: null
+  },
+  // NAYA FIELD: Image/Video store karne ke liye
+  media: {
+    type: String, 
+    default: null
+  },
+  shareCount: {
+    type: Number,
+    default: 0
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
 
 module.exports = mongoose.model('Post', postSchema);

@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Edit3, Github, Linkedin, ExternalLink, Activity, 
   Send, Plus, Sparkles, MessageCircle, CalendarClock,
-  Youtube, Globe, Camera, Image as ImageIcon,
-  X, MessageSquareQuote, Search, BrainCircuit, Bookmark, AlertCircle, Cpu, ThumbsUp, MessageSquare, Share2, MoreVertical, Trash2, ArrowLeft, Info, HelpCircle
+  Youtube, Globe, Camera, Image as ImageIcon, Video,
+  X, MessageSquareQuote, Search, BrainCircuit, AlertCircle, Cpu, ThumbsUp, MessageSquare, Share2, MoreVertical, Trash2, ArrowLeft, Info
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; 
@@ -27,42 +27,43 @@ const getLinkIcon = (url) => {
 
 const getCoderBadge = (langs) => langs?.length > 0 ? `${langs[0].name} Developer` : "Developer";
 
-// Tag Normalization Engine for Semantic Search
 const normalizeTag = (tag) => tag ? tag.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
 
-// State-Aware AI Engine
+// UPGRADED AI TAG GENERATOR (With Cybersecurity & limited fallbacks)
 const simulateAITagGeneration = (text, existingTags = []) => {
   const words = (text || "").toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/);
-  let potentialTags = [];
   
   const keywordMap = {
+    cybersecurity: 'CyberSecurity', security: 'InfoSec', hackathon: 'Hackathon', hacking: 'EthicalHacking',
     react: 'ReactJS', frontend: 'Frontend', backend: 'Backend', node: 'NodeJS',
     api: 'API', ml: 'MachineLearning', ai: 'ArtificialIntelligence', data: 'DataScience',
-    python: 'Python', hackathon: 'Hackathon', web: 'WebDevelopment', ui: 'UIUX',
-    mongo: 'MongoDB', javascript: 'JavaScript', java: 'Java', c: 'C++', 
-    project: 'ProjectWork', collab: 'Collaboration', app: 'AppDev',
-    tailwindcss: 'TailwindCSS', express: 'ExpressJS', next: 'NextJS'
+    python: 'Python', web: 'WebDevelopment', ui: 'UIUX', ux: 'UIUX', design: 'Design',
+    mongo: 'MongoDB', javascript: 'JavaScript', java: 'Java', c: 'C++', cpp: 'C++',
+    project: 'ProjectWork', collab: 'Collaboration', app: 'AppDev', android: 'Android',
+    tailwindcss: 'TailwindCSS', express: 'ExpressJS', next: 'NextJS',
+    cloud: 'CloudComputing', aws: 'AWS', blockchain: 'Blockchain', web3: 'Web3'
   };
 
-  words.forEach(w => { if (keywordMap[w]) potentialTags.push(keywordMap[w]); });
+  let matchedTags = [];
+  words.forEach(w => { if (keywordMap[w]) matchedTags.push(keywordMap[w]); });
   
-  const fallbacks = [
-    'Innovation', 'Developer', 'Coding', 'OpenSource', 'Student', 'Tech', 
-    'Startup', 'Engineering', 'Web3', 'Cloud', 'Design', 'Software', 'Algorithms'
-  ];
+  let uniqueNewTags = [...new Set(matchedTags)];
   
-  let allCandidates = [...potentialTags, ...fallbacks.sort(() => 0.5 - Math.random())];
+  // Agar koi match nahi mila, toh bas 2 random tags daalo (poori list nahi)
+  if (uniqueNewTags.length === 0) {
+    const fallbacks = ['Innovation', 'Developer', 'Coding', 'Tech', 'Student'];
+    const random1 = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    let random2 = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    while(random1 === random2) { random2 = fallbacks[Math.floor(Math.random() * fallbacks.length)]; }
+    uniqueNewTags = [random1, random2];
+  }
   
-  // Normalize existing tags to prevent AI from suggesting duplicates in a different casing
   const normalizedExisting = existingTags.map(normalizeTag);
-  
-  let uniqueNewTags = [...new Set(allCandidates)].filter(t => !normalizedExisting.includes(normalizeTag(t)));
-  
-  return uniqueNewTags.slice(0, 3); 
+  return [...new Set(uniqueNewTags)].filter(t => !normalizedExisting.includes(normalizeTag(t))).slice(0, 4); 
 };
 
 
-// 1. POST CARD COMPONENT
+// 1. POST CARD COMPONENT (Upgraded with Media display)
 function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
   const authorName = post.author?.fullName || 'User';
   const authorHandle = post.author?.handle || 'user';
@@ -142,6 +143,17 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
 
         <p className="whitespace-pre-line text-base text-slate-800 dark:text-slate-100">{post.content}</p>
 
+        {/* NAYA: Display Image or Video if it exists */}
+        {post.media && (
+          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center">
+            {post.media.startsWith('data:video') ? (
+              <video controls src={post.media} className="max-h-[400px] w-full object-contain" />
+            ) : (
+              <img src={post.media} alt="Post Attachment" className="max-h-[400px] w-full object-contain" />
+            )}
+          </div>
+        )}
+
         {post.tags && post.tags.length > 0 && (
           <div className="mt-5 flex flex-wrap gap-2">
             {post.tags.map((tag, idx) => (
@@ -194,13 +206,19 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   const [ghLoading, setGhLoading] = useState(false);
   
   const [userPosts, setUserPosts] = useState([]);
-  const [draft, setDraft] = useState(localStorage.getItem('postDraft') || ''); 
+  
+  // CREATE POST STATES
+  const [draft, setDraft] = useState(''); 
   const [draftTags, setDraftTags] = useState([]); 
   const [draftDeadline, setDraftDeadline] = useState('');
+  const [postMedia, setPostMedia] = useState(null); // NAYA: Store image/video for post
   const [isPosting, setIsPosting] = useState(false); 
   const [manualTag, setManualTag] = useState('');
 
   const [editForm, setEditForm] = useState({ tagline: '', about: '', newLinkTitle: '', newLinkUrl: '', githubUsername: '', newSkill: '', newInterest: '' });
+  
+  const [feedbackDraft, setFeedbackDraft] = useState('');
+  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
 
   useEffect(() => {
     if (!isOwnProfile && profileHandle) {
@@ -228,21 +246,17 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
     }
   }, [userData]);
 
-  // GITHUB CACHE SYSTEM & BACKGROUND FETCH
   useEffect(() => {
     if (userData?.githubUsername) {
-      // Step 1: Load from Cache instantly if exists
       if (userData.githubAnalysisCache) {
         setGithubData(userData.githubAnalysisCache);
       } else {
-        // Step 2: Fetch and Save if no cache exists
         setGhLoading(true);
         fetch(`${import.meta.env.VITE_API_URL}/api/github/analyze/${userData.githubUsername}`)
           .then(res => res.json())
           .then(data => {
             if (!data.error) {
               setGithubData(data);
-              // Save to database instantly as cache
               if (isOwnProfile) handleSaveProfile({ githubAnalysisCache: data });
             }
             setGhLoading(false);
@@ -253,13 +267,20 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
 
   const handleSaveProfile = async (updates) => {
     if (!isOwnProfile) return;
+    const oldData = { ...userData };
     const newUserData = { ...userData, ...updates };
-    setUserData(newUserData); updateUser(updates); setActiveModal(null);
+    setUserData(newUserData); 
+    updateUser(updates); 
+    setActiveModal(null);
     try {
-      await fetch(`${import.meta.env.VITE_API_URL}/api/auth/update-profile`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/update-profile`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: userData._id, ...updates })
       });
-    } catch (error) { console.error('Failed to save to DB', error); }
+      if (!res.ok) throw new Error("DB Error");
+    } catch (error) { 
+      setUserData(oldData);
+      updateUser(oldData);
+    }
   };
 
   const handleRemoveItem = (field, itemToRemove) => {
@@ -268,20 +289,22 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   };
 
   const handleCreatePost = async () => {
-    if (!draft.trim() || isPosting) return;
+    if (!draft.trim() && !postMedia) return;
+    if (isPosting) return;
     setIsPosting(true);
     const token = localStorage.getItem('token');
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/posts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ content: draft, tags: draftTags, deadline: draftDeadline || null })
+        // NAYA: Send media in the body
+        body: JSON.stringify({ content: draft, tags: draftTags, deadline: draftDeadline || null, media: postMedia })
       });
       if (response.ok) {
         const newPost = await response.json();
         newPost.author = userData; 
         setUserPosts(prev => [newPost, ...prev]);
-        setDraft(''); setDraftTags([]); setDraftDeadline(''); localStorage.removeItem('postDraft'); setActiveModal(null);
+        setDraft(''); setDraftTags([]); setDraftDeadline(''); setPostMedia(null); setActiveModal(null);
       }
     } catch (error) { console.error('Error posting:', error); } finally { setIsPosting(false); }
   };
@@ -295,6 +318,47 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
       }
       setManualTag('');
     }
+  };
+
+  const handleGiveFeedback = async () => {
+    if (!feedbackDraft.trim() || isSendingFeedback) return;
+    setIsSendingFeedback(true);
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/add-feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ fromUserId: currentUser._id, toHandle: profileHandle, feedbackText: feedbackDraft })
+      });
+      if (res.ok) {
+        const newFeedbackStr = `From @${currentUser.handle}: ${feedbackDraft}`;
+        setUserData({...userData, receivedFeedbacks: [...(userData.receivedFeedbacks||[]), newFeedbackStr]});
+        setActiveModal(null);
+        setFeedbackDraft('');
+        alert("Feedback posted successfully!");
+      }
+    } catch (e) {
+      alert("Failed to send feedback");
+    } finally {
+      setIsSendingFeedback(false);
+    }
+  };
+
+  const handleDeleteFeedback = async (feedbackText) => {
+    if (!window.confirm("Delete this feedback?")) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/delete-feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ userId: currentUser._id, feedbackText })
+      });
+      if (res.ok) {
+        const updatedList = userData.givenFeedbacks.filter(f => f !== feedbackText);
+        setUserData({...userData, givenFeedbacks: updatedList});
+        updateUser({ givenFeedbacks: updatedList });
+      }
+    } catch (e) { console.error("Delete failed", e); }
   };
 
   if (isLoadingUser) return <div className="py-20 text-center">Loading...</div>;
@@ -312,7 +376,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         </Link>
       )}
 
-      {/* 1. HEADER (Includes Tagline) */}
+      {/* HEADER */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1120]">
         <div className="group relative h-32 w-full bg-slate-200 sm:h-48 dark:bg-slate-800" style={userData.coverPhoto ? { backgroundImage: `url(${userData.coverPhoto})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}>
           {isOwnProfile && (
@@ -343,7 +407,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         </div>
       </div>
 
-      {/* 2. AREA OF INTEREST */}
+      {/* AREA OF INTEREST */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-bold dark:text-white"><Sparkles size={18} className="text-purple-500" /> Area of Interest</h2>
@@ -363,7 +427,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         )}
       </div>
 
-      {/* 3. GITHUB CYBERPUNK BOX (With Cold Start Fallback) */}
+      {/* GITHUB CYBERPUNK BOX */}
       <div className="relative overflow-hidden rounded-2xl bg-[#060a14] border border-blue-500/20 p-8 shadow-[0_0_30px_-5px_rgba(59,130,246,0.15)] text-white">
         <div className="absolute top-[-50px] right-[-50px] w-40 h-40 bg-blue-600/20 blur-[70px] rounded-full pointer-events-none"></div>
         {ghLoading ? <div className="text-center text-sm font-mono text-blue-400">CONNECTING TO GITHUB...</div> : githubData ? (
@@ -429,7 +493,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         )}
       </div>
 
-      {/* 4. CONNECT & PORTFOLIO */}
+      {/* CONNECT & PORTFOLIO */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold dark:text-white">Connect & Portfolio</h2>
@@ -451,21 +515,28 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         )}
       </div>
 
-      {/* 5. FEEDBACK RECEIVED */}
+      {/* FEEDBACK RECEIVED & GIVING */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold dark:text-white"><MessageSquareQuote size={18} className="text-green-500" /> Feedback Received</h2>
+        <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-bold dark:text-white"><MessageSquareQuote size={18} className="text-green-500" /> Feedback Received</h2>
+            {!isOwnProfile && (
+                <button onClick={() => setActiveModal('give-feedback')} className="flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400"><Plus size={14}/> Give Feedback</button>
+            )}
+        </div>
         {(!userData.receivedFeedbacks || userData.receivedFeedbacks.length === 0) ? (
           <p className="text-sm italic text-slate-500">No feedback received yet.</p>
         ) : (
           <div className="space-y-3">
             {userData.receivedFeedbacks.map((fb, i) => (
-               <div key={i} className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-900/50 dark:text-slate-300 border border-slate-100 dark:border-slate-800">"{fb}"</div>
+               <div key={i} className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-900/50 dark:text-slate-300 border border-slate-100 dark:border-slate-800">
+                 "{fb}"
+               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* 6. ABOUT */}
+      {/* ABOUT */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-bold dark:text-white"><Info size={18} className="text-blue-500" /> About</h2>
@@ -476,7 +547,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         </p>
       </div>
 
-      {/* 7. POSTS */}
+      {/* POSTS */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-lg font-bold dark:text-white">Activity & Posts</h2>
@@ -504,7 +575,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         )}
       </div>
 
-      {/* 8. SKILLS */}
+      {/* SKILLS */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-bold dark:text-white"><Cpu size={18} className="text-indigo-500" /> Skills & Tech Stack</h2>
@@ -524,84 +595,115 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
         )}
       </div>
 
-      {/* 9. FEEDBACK GIVEN */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold dark:text-white"><ThumbsUp size={18} className="text-blue-500" /> Feedback Given</h2>
-        {(!userData.givenFeedbacks || userData.givenFeedbacks.length === 0) ? (
-          <p className="text-sm italic text-slate-500">No feedback given yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {userData.givenFeedbacks.map((fb, i) => (
-               <div key={i} className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-900/50 dark:text-slate-300 border border-slate-100 dark:border-slate-800">"{fb}"</div>
-            ))}
+      {/* GIVEN FEEDBACK SECTION (WITH DELETE OPTION) */}
+      {isOwnProfile && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1120] sm:p-8">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold dark:text-white"><ThumbsUp size={18} className="text-blue-500" /> Feedback Given</h2>
+            {(!userData.givenFeedbacks || userData.givenFeedbacks.length === 0) ? (
+              <p className="text-sm italic text-slate-500">No feedback given yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {userData.givenFeedbacks.map((fb, i) => (
+                   <div key={i} className="flex justify-between items-center rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-900/50 dark:text-slate-300 border border-slate-100 dark:border-slate-800">
+                      <span>"{fb}"</span>
+                      <button onClick={() => handleDeleteFeedback(fb)} className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded-lg transition"><Trash2 size={16}/></button>
+                   </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+      )}
 
       {/* MODALS */}
       <AnimatePresence>
-        {activeModal && isOwnProfile && (
+        {activeModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
-              <div className="flex justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between p-4 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10">
                 <h3 className="font-bold dark:text-white capitalize">{activeModal.replace('-', ' ')}</h3>
                 <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
               </div>
               
               <div className="p-4 space-y-4">
+                
+                {activeModal === 'give-feedback' && (
+                    <div className="space-y-3">
+                        <p className="text-sm text-slate-500">Write constructive feedback for @{profileHandle}</p>
+                        <textarea 
+                            autoFocus rows={4} value={feedbackDraft} 
+                            onChange={(e) => setFeedbackDraft(e.target.value)} 
+                            placeholder="Great working with them on..." 
+                            className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                        />
+                        <button onClick={handleGiveFeedback} disabled={!feedbackDraft.trim() || isSendingFeedback} className="w-full bg-green-600 text-white font-bold py-2.5 rounded-xl disabled:opacity-50">
+                            {isSendingFeedback ? 'Sending...' : 'Post Feedback'}
+                        </button>
+                    </div>
+                )}
+
                 {activeModal === 'create-post' && (
                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:bg-[#0b1120] dark:border-slate-800">
                      <textarea 
-                        autoFocus 
-                        value={draft} 
-                        onChange={(e) => setDraft(e.target.value)} 
+                        autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} 
                         placeholder="Need a teammate? Describe your project..." 
                         className="min-h-[100px] w-full resize-none bg-transparent text-sm outline-none dark:text-white" 
                      />
                      
+                     {/* NAYA: Image/Video Preview */}
+                     {postMedia && (
+                        <div className="relative mb-3 inline-block rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
+                           {postMedia.startsWith('data:video') ? (
+                             <video src={postMedia} className="h-32 object-cover" />
+                           ) : (
+                             <img src={postMedia} alt="Upload preview" className="h-32 object-cover" />
+                           )}
+                           <button onClick={() => setPostMedia(null)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-red-500"><X size={14}/></button>
+                        </div>
+                     )}
+
                      <div className="my-2 flex flex-wrap gap-2 items-center">
                         {draftTags.map(tag => (
                           <span key={tag} className="flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
                             #{tag} <button onClick={() => setDraftTags(draftTags.filter(t => t !== tag))} className="hover:text-red-500"><X size={12}/></button>
                           </span>
                         ))}
-                        {/* UNIFIED MANUAL TAG INPUT */}
                         <input 
-                           type="text" 
-                           value={manualTag} 
-                           onChange={e => setManualTag(e.target.value)} 
-                           onKeyDown={handleManualTagAdd} 
+                           type="text" value={manualTag} onChange={e => setManualTag(e.target.value)} onKeyDown={handleManualTagAdd} 
                            placeholder={draftTags.length === 0 ? "Type custom tag & press Enter..." : "+ custom tag"} 
-                           className="bg-transparent text-xs outline-none text-slate-500 dark:text-slate-400 placeholder-slate-400 flex-1 min-w-[150px]"
+                           className="bg-transparent text-xs outline-none text-slate-500 flex-1 min-w-[150px]"
                         />
                      </div>
-                     
                      <div className="mt-2 mb-3">
-                       <label className="flex items-center gap-2 text-xs font-bold text-slate-500 mb-1"><CalendarClock size={14}/> Recruitment Deadline (Optional)</label>
-                       <input type="datetime-local" value={draftDeadline} onChange={(e) => setDraftDeadline(e.target.value)} className="w-full rounded-lg border border-slate-200 p-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"/>
+                       <label className="flex items-center gap-2 text-xs font-bold text-slate-500 mb-1"><CalendarClock size={14}/> Recruitment Deadline</label>
+                       <input type="datetime-local" value={draftDeadline} onChange={(e) => setDraftDeadline(e.target.value)} className="w-full rounded-lg border border-slate-200 p-2 text-xs dark:bg-slate-800 dark:text-white"/>
                      </div>
+                     
+                     <div className="mt-3 flex justify-between items-center border-t border-slate-200/50 pt-3">
+                       <div className="flex gap-3 items-center">
+                         {/* NAYA: Image/Video Select Buttons */}
+                         <label className="cursor-pointer text-slate-400 hover:text-blue-500 transition" title="Add Image">
+                            <ImageIcon size={18} />
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                               const f = e.target.files[0];
+                               if(f) { const r = new FileReader(); r.onloadend = () => setPostMedia(r.result); r.readAsDataURL(f); }
+                            }}/>
+                         </label>
+                         <label className="cursor-pointer text-slate-400 hover:text-blue-500 transition" title="Add Video">
+                            <Video size={18} />
+                            <input type="file" accept="video/*" className="hidden" onChange={(e) => {
+                               const f = e.target.files[0];
+                               if(f) { const r = new FileReader(); r.onloadend = () => setPostMedia(r.result); r.readAsDataURL(f); }
+                            }}/>
+                         </label>
 
-                     <div className="mt-3 flex justify-between items-center border-t border-slate-200/50 pt-3 dark:border-slate-700/50">
-                       <button 
-                          type="button" 
-                          onClick={() => {
-                            const newTags = simulateAITagGeneration(draft, draftTags);
-                            setDraftTags([...draftTags, ...newTags]);
-                          }} 
-                          disabled={!draft.trim()} 
-                          className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 disabled:opacity-50 dark:bg-purple-900/30 dark:text-purple-400"
-                       >
-                         <BrainCircuit size={14}/> AI Tag
-                       </button>
-                       <div className="flex gap-2">
-                         <button onClick={handleCreatePost} disabled={!draft.trim() || isPosting} className="flex items-center gap-1.5 bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-bold disabled:opacity-50 hover:bg-blue-700">
-                           <Send size={14}/> {isPosting ? 'Posting...' : 'Post'}
-                         </button>
+                         <button type="button" onClick={() => setDraftTags([...draftTags, ...simulateAITagGeneration(draft, draftTags)])} disabled={!draft.trim()} className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 ml-2"><BrainCircuit size={14}/> AI Tag</button>
                        </div>
+                       
+                       <button onClick={handleCreatePost} disabled={(!draft.trim() && !postMedia) || isPosting} className="flex items-center gap-1.5 bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-bold disabled:opacity-50"><Send size={14}/> Post</button>
                      </div>
                    </div>
                 )}
-                {/* Profile Edit Modals */}
+                
                 {activeModal === 'edit-profile' && (
                   <>
                     <input type="text" placeholder="Tagline" value={editForm.tagline} onChange={(e) => setEditForm({...editForm, tagline: e.target.value})} className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
@@ -630,7 +732,7 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
                 {activeModal === 'edit-about' && <textarea rows={5} value={editForm.about} onChange={(e) => setEditForm({...editForm, about: e.target.value})} className="w-full rounded-xl border border-slate-200 p-3 text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white" />}
               </div>
               
-              {activeModal !== 'create-post' && (
+              {isOwnProfile && !['create-post', 'give-feedback'].includes(activeModal) && (
                 <div className="flex justify-end p-4 border-t border-slate-100 bg-slate-50 dark:bg-slate-800/50 dark:border-slate-800">
                   <button onClick={() => {
                     if (activeModal === 'edit-profile') handleSaveProfile({ tagline: editForm.tagline, githubUsername: editForm.githubUsername });
@@ -646,12 +748,13 @@ function Profile({ currentUser, isOwnProfile = true, profileHandle = null }) {
   );
 }
 
-// 3. HOME FEED COMPONENT 
+// 3. HOME FEED COMPONENT (Update to add media logic)
 function Home({ currentUser }) {
   const navigate = useNavigate();
-  const [draft, setDraft] = useState(localStorage.getItem('postDraft') || '');
+  const [draft, setDraft] = useState('');
   const [draftTags, setDraftTags] = useState([]);
   const [draftDeadline, setDraftDeadline] = useState('');
+  const [postMedia, setPostMedia] = useState(null); // NAYA
   const [manualTag, setManualTag] = useState('');
   
   const [searchQuery, setSearchQuery] = useState('');
@@ -661,7 +764,6 @@ function Home({ currentUser }) {
   const [posts, setPosts] = useState([]); 
   const [isPosting, setIsPosting] = useState(false);
   
-  // MULTI-SELECT FILTERS (Array State)
   const [activeFilters, setActiveFilters] = useState([]);
 
   useEffect(() => {
@@ -671,7 +773,6 @@ function Home({ currentUser }) {
       .catch(console.error);
   }, []);
 
-  // Live Backend Search Fetcher
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchQuery.length > 1) {
@@ -688,7 +789,6 @@ function Home({ currentUser }) {
 
   const userTags = Array.from(new Set([...(currentUser?.skills || []), ...(currentUser?.interests || [])]));
   
-  // MULTI-SELECT FILTERING ENGINE
   const filteredPosts = posts.filter(post => {
     const contentToSearch = post.content || '';
     const matchesSearch = searchQuery ? contentToSearch.toLowerCase().includes(searchQuery.toLowerCase()) : true;
@@ -696,7 +796,6 @@ function Home({ currentUser }) {
     let matchesFilter = true;
     if (activeFilters.length > 0) {
       const normalizedPostTags = (post.tags || []).map(normalizeTag);
-      // Returns true if ANY selected filter matches the post's tags (OR logic)
       matchesFilter = activeFilters.some(filterTag => normalizedPostTags.includes(normalizeTag(filterTag)));
     }
     return matchesSearch && matchesFilter;
@@ -711,7 +810,8 @@ function Home({ currentUser }) {
   };
 
   const handleCreatePost = async () => {
-    if (!draft.trim() || isPosting) return;
+    if (!draft.trim() && !postMedia) return;
+    if (isPosting) return;
     setIsPosting(true);
     const token = localStorage.getItem('token');
   
@@ -719,14 +819,14 @@ function Home({ currentUser }) {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/posts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ content: draft, tags: draftTags, deadline: draftDeadline || null })
+        body: JSON.stringify({ content: draft, tags: draftTags, deadline: draftDeadline || null, media: postMedia }) // NAYA
       });
   
       if (response.ok) {
         const newPost = await response.json();
         newPost.author = currentUser; 
         setPosts(prev => [newPost, ...prev]);
-        setDraft(''); setDraftTags([]); setDraftDeadline(''); localStorage.removeItem('postDraft');
+        setDraft(''); setDraftTags([]); setDraftDeadline(''); setPostMedia(null);
       }
     } catch (error) { console.error('Error posting:', error); } finally { setIsPosting(false); }
   };
@@ -745,7 +845,7 @@ function Home({ currentUser }) {
   return (
     <div className="mx-auto max-w-3xl pb-20 space-y-6">
       
-      {/* SEARCH BAR (Dynamic Autocomplete & Click Navigation) */}
+      {/* SEARCH BAR */}
       <div className="relative z-20">
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20 dark:border-slate-800 dark:bg-[#0b1120]">
           <Search size={18} className="ml-2 text-slate-400" />
@@ -763,14 +863,13 @@ function Home({ currentUser }) {
           {searchQuery && <button onClick={() => { setSearchQuery(''); setShowSearchDropdown(false); }} className="mr-2 text-xs font-bold text-slate-400">Clear</button>}
         </div>
 
-        {/* Dropdown for Backend User matches */}
         {showSearchDropdown && searchQuery && (
           <div className="absolute top-14 left-0 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
              {searchResults.length > 0 ? (
                searchResults.map(user => (
                  <button 
                     key={user.handle} 
-                    onMouseDown={() => navigate(`/profile/${user.handle}`)} // onMouseDown bypasses onBlur race condition
+                    onMouseDown={() => navigate(`/profile/${user.handle}`)} 
                     className="w-full flex items-center gap-3 border-b border-slate-100 p-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800 text-left transition-colors"
                  >
                     {user.profilePicture ? (
@@ -793,7 +892,7 @@ function Home({ currentUser }) {
         )}
       </div>
 
-      {/* CREATE POST BOX IN FEED (Hybrid Tags Array) */}
+      {/* CREATE POST BOX IN FEED */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0b1120]">
         <textarea 
           value={draft} onChange={(e) => setDraft(e.target.value)} 
@@ -801,13 +900,24 @@ function Home({ currentUser }) {
           className="min-h-[100px] w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white" 
         />
         
+        {/* NAYA: Image/Video Preview */}
+        {postMedia && (
+           <div className="relative mb-3 inline-block rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
+              {postMedia.startsWith('data:video') ? (
+                <video src={postMedia} className="h-32 object-cover" />
+              ) : (
+                <img src={postMedia} alt="Upload preview" className="h-32 object-cover" />
+              )}
+              <button onClick={() => setPostMedia(null)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-red-500"><X size={14}/></button>
+           </div>
+        )}
+
         <div className="my-2 flex flex-wrap gap-2 items-center">
            {draftTags.map(tag => (
              <span key={tag} className="flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
                #{tag} <button onClick={() => setDraftTags(draftTags.filter(t => t !== tag))} className="hover:text-red-500"><X size={12}/></button>
              </span>
            ))}
-           {/* UNIFIED MANUAL TAG INPUT */}
            <input 
               type="text" 
               value={manualTag} 
@@ -824,22 +934,29 @@ function Home({ currentUser }) {
         </div>
 
         <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
-          <button 
-             type="button" 
-             onClick={() => {
-               const newTags = simulateAITagGeneration(draft, draftTags);
-               setDraftTags([...draftTags, ...newTags]);
-             }} 
-             disabled={!draft.trim()} 
-             className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
-          >
-            <BrainCircuit size={14}/> AI Tag
-          </button>
-          <div className="flex gap-2">
-            <button onClick={handleCreatePost} disabled={!draft.trim() || isPosting} className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
-              <Send size={14}/> {isPosting ? 'Posting...' : 'Post'}
-            </button>
+          <div className="flex gap-3 items-center">
+             {/* NAYA: Select Image/Video */}
+             <label className="cursor-pointer text-slate-400 hover:text-blue-500 transition" title="Add Image">
+                <ImageIcon size={18} />
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                   const f = e.target.files[0];
+                   if(f) { const r = new FileReader(); r.onloadend = () => setPostMedia(r.result); r.readAsDataURL(f); }
+                }}/>
+             </label>
+             <label className="cursor-pointer text-slate-400 hover:text-blue-500 transition" title="Add Video">
+                <Video size={18} />
+                <input type="file" accept="video/*" className="hidden" onChange={(e) => {
+                   const f = e.target.files[0];
+                   if(f) { const r = new FileReader(); r.onloadend = () => setPostMedia(r.result); r.readAsDataURL(f); }
+                }}/>
+             </label>
+
+             <button type="button" onClick={() => setDraftTags([...draftTags, ...simulateAITagGeneration(draft, draftTags)])} disabled={!draft.trim()} className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 ml-2"><BrainCircuit size={14}/> AI Tag</button>
           </div>
+          
+          <button onClick={handleCreatePost} disabled={(!draft.trim() && !postMedia) || isPosting} className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+            <Send size={14}/> {isPosting ? 'Posting...' : 'Post'}
+          </button>
         </div>
       </div>
 
