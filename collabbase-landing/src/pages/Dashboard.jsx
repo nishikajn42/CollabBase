@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Edit3, Github, Linkedin, ExternalLink, Activity, 
+import {
+  Edit3, Github, Linkedin, ExternalLink, Activity,
   Send, Plus, Sparkles, MessageCircle, CalendarClock,
   Youtube, Globe, Camera, Image as ImageIcon, Video,
   X, MessageSquareQuote, Search, BrainCircuit, AlertCircle, Cpu, ThumbsUp, MessageSquare, Share2, MoreVertical, Trash2, ArrowLeft, Info,
-  Loader2 
+  Loader2
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; 
+import { useAuth } from '../context/AuthContext';
 
 // --- HELPERS ---
 const formatUrl = (url) => {
@@ -40,6 +40,157 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
   const [shareCount, setShareCount] = useState(post.shareCount || 0);
   const [showOptions, setShowOptions] = useState(false);
 
+  // --- AI ICEBREAKER STATES (For Both Sender & Author) ---
+  const [showIcebreakerModal, setShowIcebreakerModal] = useState(false);
+  const [icebreakerDraft, setIcebreakerDraft] = useState('');
+  const [isGeneratingIcebreaker, setIsGeneratingIcebreaker] = useState(false);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState(null); // Used when author reaches out
+
+  // --- SUGGESTIONS STATES (For Author) ---
+  const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
+  const [suggestedUsers, setSuggestedUsers] = useState([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [analyzingMatchFor, setAnalyzingMatchFor] = useState(null);
+  const [matchAnalyses, setMatchAnalyses] = useState({});
+
+  // 1. Send Icebreaker (Receiver -> Author)
+  const handleOpenIcebreaker = async () => {
+    setSelectedCandidate(null); // Ensure candidate is cleared
+    setShowIcebreakerModal(true);
+    setIsGeneratingIcebreaker(true);
+    setIcebreakerDraft('');
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/messages/generate-icebreaker`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderId: currentUser._id,
+          receiverId: post.author._id || post.author,
+          postId: post._id
+        })
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        setIcebreakerDraft(data.draft);
+      } else {
+        setIcebreakerDraft("Hi! I saw your post and found it really interesting. I'd love to connect and discuss it further."); 
+      }
+    } catch (error) {
+      console.error("AI Draft Error:", error);
+      setIcebreakerDraft("Hi! I saw your post and found it really interesting. I'd love to connect and discuss it further.");
+    } finally {
+      setIsGeneratingIcebreaker(false);
+    }
+  };
+
+  // 2. Open Suggestions Modal (Author -> Candidates)
+  const handleOpenSuggestionsModal = async () => {
+    setShowSuggestionsModal(true);
+    setIsLoadingSuggestions(true);
+    try {
+      // Use the first tag of the post to search for relevant users, or default to generic query
+      const query = post.tags?.[0] || 'developer';
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/search?q=${query}`);
+      const data = await res.json();
+      // Remove the author themselves from the suggestions
+      const candidates = data.filter(u => u._id !== currentUser._id);
+      setSuggestedUsers(candidates);
+    } catch (e) {
+      console.error("Suggestions Error:", e);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  // 3. Analyze Match (Author checks a candidate)
+  const handleAnalyzeMatch = async (candidateId) => {
+    setAnalyzingMatchFor(candidateId);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/messages/analyze-match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post._id, candidateId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMatchAnalyses(prev => ({ ...prev, [candidateId]: data.matchAnalysis }));
+      }
+    } catch (e) {
+      console.error("Match Analysis Error:", e);
+      setMatchAnalyses(prev => ({ ...prev, [candidateId]: "Failed to generate match analysis." }));
+    } finally {
+      setAnalyzingMatchFor(null);
+    }
+  };
+
+  // 4. Send Reverse Icebreaker (Author -> Candidate)
+  const handleOpenReverseIcebreaker = async (candidate) => {
+    setSelectedCandidate(candidate);
+    setShowIcebreakerModal(true);
+    setIsGeneratingIcebreaker(true);
+    setIcebreakerDraft('');
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/messages/generate-author-icebreaker`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          authorId: currentUser._id,
+          candidateId: candidate._id,
+          postId: post._id
+        })
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        setIcebreakerDraft(data.draft);
+      } else {
+        setIcebreakerDraft(`Hi ${candidate.fullName}, I saw your profile and think you'd be a great fit for my project!`);
+      }
+    } catch (error) {
+      console.error("Reverse AI Draft Error:", error);
+      setIcebreakerDraft(`Hi ${candidate.fullName}, I saw your profile and think you'd be a great fit for my project!`);
+    } finally {
+      setIsGeneratingIcebreaker(false);
+    }
+  };
+
+  // 5. Final Send Logic (Handles both directions)
+  const handleSendIcebreaker = async () => {
+    if (!icebreakerDraft.trim()) return;
+    setIsSendingMessage(true);
+
+    const receiverId = isAuthor && selectedCandidate ? selectedCandidate._id : (post.author._id || post.author);
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/messages/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderId: currentUser._id,
+          receiverId: receiverId,
+          text: icebreakerDraft
+        })
+      });
+
+      if (response.ok) {
+        alert("Icebreaker sent successfully!");
+        setShowIcebreakerModal(false);
+        if (isAuthor) setShowSuggestionsModal(false);
+      } else {
+        alert("Failed to send the message.");
+      }
+    } catch (error) {
+      console.error("Send Error:", error);
+      alert("Failed to send message.");
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
+
   const handleShare = async () => {
     const postUrl = `${window.location.origin}/post/${post._id}`;
     navigator.clipboard.writeText(`Check out this post by @${authorHandle}:\n\n${postUrl}`);
@@ -66,7 +217,7 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
     <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#1a1f2e]">
       {post.deadline && (
         <div className="bg-amber-600/90 px-4 py-1.5 text-center text-xs font-bold text-white backdrop-blur-md">
-           ⏳ Recruitment Deadline: {new Date(post.deadline).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+            ⏳ Recruitment Deadline: {new Date(post.deadline).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
         </div>
       )}
       <div className="p-5">
@@ -139,6 +290,22 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
              <MessageSquare size={20} />
              <span className="text-xs font-semibold">Comment</span>
           </button>
+
+          {/* AI ICEBREAKER BUTTON (For Receivers) */}
+          {!isAuthor && (
+            <button onClick={handleOpenIcebreaker} className="flex items-center gap-1.5 hover:text-purple-500 text-purple-600 dark:text-purple-400 transition-colors">
+               <BrainCircuit size={18} />
+               <span className="text-xs font-bold">AI Icebreaker</span>
+            </button>
+          )}
+
+          {/* FIND TEAMMATES BUTTON (For Authors) */}
+          {isAuthor && (
+            <button onClick={handleOpenSuggestionsModal} className="flex items-center gap-1.5 hover:text-indigo-500 text-indigo-600 dark:text-indigo-400 transition-colors">
+               <BrainCircuit size={18} />
+               <span className="text-xs font-bold">Find Teammates</span>
+            </button>
+          )}
           
           <button onClick={handleShare} className="ml-auto flex items-center gap-2 hover:text-blue-500 transition-colors">
              <Share2 size={20} />
@@ -146,16 +313,308 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
           </button>
         </div>
       </div>
+
+      {/* SUGGESTIONS MODAL (For Authors) */}
+      <AnimatePresence>
+        {showSuggestionsModal && (
+          <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-[#0b1120] border border-slate-200 dark:border-slate-800 max-h-[85vh] flex flex-col">
+              <div className="flex justify-between p-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                <div>
+                  <h3 className="font-bold dark:text-white flex items-center gap-2"><Sparkles size={18} className="text-indigo-500"/> Suggested Teammates</h3>
+                  <p className="text-xs text-slate-500">Based on your post tags and requirements.</p>
+                </div>
+                <button onClick={() => setShowSuggestionsModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+              </div>
+              <div className="p-5 overflow-y-auto flex-1 bg-slate-50 dark:bg-[#0b1120]/50">
+                {isLoadingSuggestions ? (
+                   <div className="flex flex-col items-center justify-center py-10">
+                     <Loader2 className="animate-spin text-indigo-500 mb-3" size={32}/>
+                     <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Finding the best matches...</p>
+                   </div>
+                ) : suggestedUsers.length === 0 ? (
+                   <p className="text-center text-sm text-slate-500 py-10">No users found matching these criteria right now.</p>
+                ) : (
+                   <div className="space-y-4">
+                     {suggestedUsers.map(user => (
+                       <div key={user._id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                         <div className="flex justify-between items-start">
+                           <div className="flex gap-3">
+                             {user.profilePicture ? (
+                               <img src={user.profilePicture} className="h-12 w-12 rounded-full object-cover"/>
+                             ) : (
+                               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold dark:bg-indigo-900/30 dark:text-indigo-400">
+                                 {user.fullName?.substring(0,2).toUpperCase()}
+                               </div>
+                             )}
+                             <div>
+                               <Link to={`/profile/${user.handle}`} className="font-bold text-sm text-slate-900 dark:text-white hover:underline">{user.fullName}</Link>
+                               <p className="text-xs text-slate-500 line-clamp-1">{user.tagline || `@${user.handle}`}</p>
+                               <div className="flex flex-wrap gap-1 mt-2">
+                                 {(user.skills || []).slice(0, 3).map(skill => (
+                                   <span key={skill} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md dark:bg-slate-800 dark:text-slate-400">{skill}</span>
+                                 ))}
+                                 {user.skills?.length > 3 && <span className="text-[10px] text-slate-400">+{user.skills.length - 3}</span>}
+                               </div>
+                             </div>
+                           </div>
+                           <button 
+                             onClick={() => handleOpenReverseIcebreaker(user)} 
+                             className="shrink-0 flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                           >
+                             <Send size={12}/> Pitch Them
+                           </button>
+                         </div>
+                         
+                         {/* Match Analysis Section */}
+                         <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                           {!matchAnalyses[user._id] ? (
+                             <button onClick={() => handleAnalyzeMatch(user._id)} disabled={analyzingMatchFor === user._id} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
+                               {analyzingMatchFor === user._id ? <Loader2 size={12} className="animate-spin"/> : <BrainCircuit size={12}/>}
+                               {analyzingMatchFor === user._id ? 'Analyzing match...' : 'Why this person?'}
+                             </button>
+                           ) : (
+                             <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 border border-indigo-100 dark:border-indigo-800/50">
+                               <p className="text-xs text-indigo-900 dark:text-indigo-200 leading-relaxed font-medium">
+                                 <span className="font-bold text-indigo-700 dark:text-indigo-400">AI Match Insight:</span> {matchAnalyses[user._id]}
+                               </p>
+                             </div>
+                           )}
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ICEBREAKER MODAL (Handles both Sender & Author logic) */}
+      <AnimatePresence>
+        {showIcebreakerModal && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-[#0b1120] border border-slate-200 dark:border-slate-800">
+              <div className="flex justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <h3 className="font-bold dark:text-white flex items-center gap-2">
+                    <Sparkles size={18} className={isAuthor ? "text-indigo-500" : "text-purple-500"}/> 
+                    {isAuthor ? `Draft Pitch to ${selectedCandidate?.fullName}` : 'Draft AI Icebreaker'}
+                  </h3>
+                  {isAuthor && <p className="text-xs text-slate-500 mt-1">Convince them to join your project.</p>}
+                </div>
+                <button onClick={() => setShowIcebreakerModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+              </div>
+              <div className="p-5">
+                {isGeneratingIcebreaker ? (
+                  <div className="flex flex-col items-center justify-center py-10">
+                    <Loader2 className={`animate-spin mb-3 ${isAuthor ? 'text-indigo-500' : 'text-purple-500'}`} size={36}/>
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Analyzing Profiles...</p>
+                    <p className="text-xs text-slate-500 mt-1">Crafting the perfect intro message.</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Review and personalize your AI-generated message before sending:</p>
+                    <textarea
+                      value={icebreakerDraft}
+                      onChange={(e) => setIcebreakerDraft(e.target.value)}
+                      className="w-full min-h-[140px] rounded-xl border border-slate-200 p-4 text-sm outline-none bg-slate-50 dark:bg-slate-900/50 dark:border-slate-700 dark:text-white resize-none"
+                    />
+                    <div className="mt-5 flex justify-end gap-3">
+                      <button onClick={() => setShowIcebreakerModal(false)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Cancel</button>
+                      <button onClick={handleSendIcebreaker} disabled={!icebreakerDraft.trim() || isSendingMessage} className={`${isAuthor ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-600/20'} text-white px-6 py-2 rounded-xl text-sm font-bold disabled:opacity-50 flex items-center gap-2 transition-colors shadow-lg`}>
+                        {isSendingMessage ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
+                        {isSendingMessage ? 'Sending...' : 'Send Message'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function Messages() {
+// 4. MESSAGES (TWO-PANE INBOX) COMPONENT
+function Messages({ currentUser }) {
+  const [conversations, setConversations] = useState([]);
+  const [activeChat, setActiveChat] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [replyText, setReplyText] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+
+  // 1. Fetch Directory (Left Pane)
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL}/api/messages/conversations/${currentUser._id}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error) setConversations(data);
+        setIsLoading(false);
+      })
+      .catch(console.error);
+  }, [currentUser._id]);
+
+  // 2. Fetch Chat History (Right Pane) when a conversation is clicked
+  useEffect(() => {
+    if (activeChat) {
+      fetch(`${import.meta.env.VITE_API_URL}/api/messages/${activeChat._id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.error) setMessages(data);
+        })
+        .catch(console.error);
+    }
+  }, [activeChat]);
+
+  // 3. Send a new message
+  const handleSendMessage = async () => {
+    if (!replyText.trim() || !activeChat) return;
+    setIsSending(true);
+
+    const receiver = activeChat.participants.find(p => p._id !== currentUser._id);
+
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/messages/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderId: currentUser._id,
+          receiverId: receiver._id,
+          text: replyText
+        })
+      });
+
+      if (res.ok) {
+        const newMsg = await res.json();
+        // Optimistically update UI
+        setMessages(prev => [...prev, { ...newMsg, sender: currentUser }]);
+        setReplyText('');
+        
+        // Update left pane snippet
+        setConversations(prev => prev.map(c => 
+          c._id === activeChat._id ? { ...c, lastMessage: newMsg.text } : c
+        ));
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-20">
+        <Loader2 className="animate-spin text-purple-500" size={32} />
+      </div>
+    );
+  }
+
   return (
-    <div className="mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm dark:border-slate-800 dark:bg-[#0b1120]">
-      <MessageCircle size={48} className="mx-auto mb-4 text-blue-500 opacity-50" />
-      <h2 className="text-xl font-bold text-slate-900 dark:text-white">Messages</h2>
-      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Your direct messages will appear here.</p>
+    <div className="mx-auto max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1120] flex h-[75vh]">
+      
+      {/* LEFT PANE: Directory */}
+      <div className="w-1/3 border-r border-slate-200 dark:border-slate-800 flex flex-col">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800">
+          <h2 className="text-lg font-bold dark:text-white">Messages</h2>
+        </div>
+        
+        <div className="overflow-y-auto flex-1">
+          {conversations.length === 0 ? (
+            <p className="p-6 text-sm text-center text-slate-500">No conversations yet.</p>
+          ) : (
+            conversations.map(conv => {
+              const otherUser = conv.participants.find(p => p._id !== currentUser._id) || conv.participants[0];
+              return (
+                <button 
+                  key={conv._id}
+                  onClick={() => setActiveChat(conv)}
+                  className={`w-full flex items-center gap-3 p-4 text-left border-b border-slate-100 dark:border-slate-800/50 transition-colors ${activeChat?._id === conv._id ? 'bg-slate-50 dark:bg-slate-800/80' : 'hover:bg-slate-50 dark:hover:bg-slate-900/50'}`}
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-700 font-bold dark:bg-purple-900/30 dark:text-purple-400">
+                     {otherUser.profilePicture ? <img src={otherUser.profilePicture} className="h-full w-full rounded-full object-cover"/> : otherUser.fullName?.substring(0,2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white line-clamp-1">{otherUser.fullName}</h4>
+                    <p className="text-xs text-slate-500 line-clamp-1">{conv.lastMessage || "Started a conversation"}</p>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* RIGHT PANE: Contextual Canvas */}
+      <div className="w-2/3 flex flex-col bg-slate-50 dark:bg-[#0b1120]">
+        {!activeChat ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+            <MessageCircle size={48} className="text-slate-300 dark:text-slate-700 mb-4" />
+            <h3 className="font-bold text-slate-500 dark:text-slate-400">Select a conversation</h3>
+            <p className="text-xs text-slate-400 mt-2">Choose an active chat from the left or generate an Icebreaker on someone's post to start networking.</p>
+          </div>
+        ) : (
+          <>
+            {/* Header with Context */}
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center">
+              {(() => {
+                const receiver = activeChat.participants.find(p => p._id !== currentUser._id) || activeChat.participants[0];
+                return (
+                  <div className="flex items-center gap-3">
+                     <div className="h-10 w-10 shrink-0 rounded-full bg-slate-200 overflow-hidden">
+                       {receiver.profilePicture ? <img src={receiver.profilePicture} className="h-full w-full object-cover"/> : <div className="h-full w-full flex items-center justify-center text-slate-500 font-bold">{receiver.fullName.substring(0,2).toUpperCase()}</div>}
+                     </div>
+                     <div>
+                       <Link to={`/profile/${receiver.handle}`} className="font-bold text-sm text-slate-900 dark:text-white hover:underline">{receiver.fullName}</Link>
+                       <p className="text-xs text-slate-500">{receiver.tagline || `@${receiver.handle}`}</p>
+                     </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Chat History */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.map((msg, i) => {
+                const isMe = msg.sender._id === currentUser._id;
+                return (
+                  <div key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[70%] p-3 rounded-2xl text-sm ${isMe ? 'bg-purple-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-800 dark:bg-slate-800 dark:border-slate-700 dark:text-white rounded-bl-none'}`}>
+                      {msg.text}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Input Area */}
+            <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+               <div className="flex items-end gap-2">
+                 <textarea 
+                   value={replyText}
+                   onChange={e => setReplyText(e.target.value)}
+                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                   placeholder="Write a message..."
+                   className="flex-1 resize-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm outline-none dark:text-white max-h-32"
+                   rows={1}
+                 />
+                 <button 
+                   onClick={handleSendMessage}
+                   disabled={!replyText.trim() || isSending}
+                   className="h-11 w-11 shrink-0 flex items-center justify-center rounded-xl bg-purple-600 text-white disabled:opacity-50 hover:bg-purple-700 transition-colors"
+                 >
+                   {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className="-ml-1" />}
+                 </button>
+               </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -1141,7 +1600,8 @@ export default function Dashboard({ activeTab, user }) {
   const profileHandle = isProfileRoute ? location.pathname.split('/')[2] : null;
   const isOwnProfile = !profileHandle || profileHandle === user?.handle;
 
-  if (activeTab === 'messages' && !isProfileRoute) return <Messages />;
+  // if (activeTab === 'messages' && !isProfileRoute) return <Messages />;
+  if (activeTab === 'messages' && !isProfileRoute) return <Messages currentUser={user} />;
   if (activeTab === 'profile' || isProfileRoute) return <Profile currentUser={user} isOwnProfile={isOwnProfile} profileHandle={profileHandle} />; 
   return <Home currentUser={user} />; 
 }
