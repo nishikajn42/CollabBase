@@ -31,6 +31,7 @@ const getCoderBadge = (langs) => langs?.length > 0 ? `${langs[0].name} Developer
 const normalizeTag = (tag) => tag ? tag.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
 
 // 1. POST CARD COMPONENT
+// 1. POST CARD COMPONENT
 function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
   const authorName = post.author?.fullName || 'User';
   const authorHandle = post.author?.handle || 'user';
@@ -40,151 +41,133 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
   const [shareCount, setShareCount] = useState(post.shareCount || 0);
   const [showOptions, setShowOptions] = useState(false);
 
-  // --- AI ICEBREAKER STATES (For Both Sender & Author) ---
+  // --- AI ICEBREAKER & REFINEMENT STATES ---
   const [showIcebreakerModal, setShowIcebreakerModal] = useState(false);
   const [icebreakerDraft, setIcebreakerDraft] = useState('');
+  const [refineText, setRefineText] = useState('');
   const [isGeneratingIcebreaker, setIsGeneratingIcebreaker] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [selectedCandidate, setSelectedCandidate] = useState(null); // Used when author reaches out
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
 
-  // --- SUGGESTIONS STATES (For Author) ---
+  // --- SUGGESTIONS STATES ---
   const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
   const [suggestedUsers, setSuggestedUsers] = useState([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [analyzingMatchFor, setAnalyzingMatchFor] = useState(null);
   const [matchAnalyses, setMatchAnalyses] = useState({});
 
-  // 1. Send Icebreaker (Receiver -> Author)
   const handleOpenIcebreaker = async () => {
-    setSelectedCandidate(null); // Ensure candidate is cleared
+    setSelectedCandidate(null);
     setShowIcebreakerModal(true);
     setIsGeneratingIcebreaker(true);
     setIcebreakerDraft('');
+    setRefineText('');
 
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/messages/generate-icebreaker`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          senderId: currentUser._id,
-          receiverId: post.author._id || post.author,
-          postId: post._id
-        })
+        body: JSON.stringify({ senderId: currentUser._id, receiverId: post.author._id || post.author, postId: post._id })
       });
-      
       const data = await response.json();
-      if (response.ok) {
-        setIcebreakerDraft(data.draft);
-      } else {
-        setIcebreakerDraft("Hi! I saw your post and found it really interesting. I'd love to connect and discuss it further."); 
-      }
+      setIcebreakerDraft(response.ok ? data.draft : "Hi! I'd love to connect regarding your post.");
     } catch (error) {
-      console.error("AI Draft Error:", error);
-      setIcebreakerDraft("Hi! I saw your post and found it really interesting. I'd love to connect and discuss it further.");
+      setIcebreakerDraft("Hi! I'd love to connect regarding your post.");
     } finally {
       setIsGeneratingIcebreaker(false);
     }
   };
 
-  // 2. Open Suggestions Modal (Author -> Candidates)
   const handleOpenSuggestionsModal = async () => {
     setShowSuggestionsModal(true);
     setIsLoadingSuggestions(true);
     try {
-      // Use the first tag of the post to search for relevant users, or default to generic query
-      const query = post.tags?.[0] || 'developer';
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/search?q=${query}`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/messages/suggest-candidates`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post._id, authorId: currentUser._id })
+      });
       const data = await res.json();
-      // Remove the author themselves from the suggestions
-      const candidates = data.filter(u => u._id !== currentUser._id);
-      setSuggestedUsers(candidates);
+      setSuggestedUsers(data);
     } catch (e) {
-      console.error("Suggestions Error:", e);
+      console.error(e);
     } finally {
       setIsLoadingSuggestions(false);
     }
   };
 
-  // 3. Analyze Match (Author checks a candidate)
   const handleAnalyzeMatch = async (candidateId) => {
     setAnalyzingMatchFor(candidateId);
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/messages/analyze-match`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ postId: post._id, candidateId })
       });
       const data = await res.json();
-      if (res.ok) {
-        setMatchAnalyses(prev => ({ ...prev, [candidateId]: data.matchAnalysis }));
-      }
+      if (res.ok) setMatchAnalyses(prev => ({ ...prev, [candidateId]: data.matchAnalysis }));
     } catch (e) {
-      console.error("Match Analysis Error:", e);
       setMatchAnalyses(prev => ({ ...prev, [candidateId]: "Failed to generate match analysis." }));
     } finally {
       setAnalyzingMatchFor(null);
     }
   };
 
-  // 4. Send Reverse Icebreaker (Author -> Candidate)
   const handleOpenReverseIcebreaker = async (candidate) => {
     setSelectedCandidate(candidate);
     setShowIcebreakerModal(true);
     setIsGeneratingIcebreaker(true);
     setIcebreakerDraft('');
+    setRefineText('');
 
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/messages/generate-author-icebreaker`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          authorId: currentUser._id,
-          candidateId: candidate._id,
-          postId: post._id
-        })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authorId: currentUser._id, candidateId: candidate._id, postId: post._id })
       });
-      
       const data = await response.json();
-      if (response.ok) {
-        setIcebreakerDraft(data.draft);
-      } else {
-        setIcebreakerDraft(`Hi ${candidate.fullName}, I saw your profile and think you'd be a great fit for my project!`);
-      }
+      setIcebreakerDraft(response.ok ? data.draft : `Hi ${candidate.fullName}, I think you'd be a great fit!`);
     } catch (error) {
-      console.error("Reverse AI Draft Error:", error);
-      setIcebreakerDraft(`Hi ${candidate.fullName}, I saw your profile and think you'd be a great fit for my project!`);
+      setIcebreakerDraft(`Hi ${candidate.fullName}, I think you'd be a great fit!`);
     } finally {
       setIsGeneratingIcebreaker(false);
     }
   };
 
-  // 5. Final Send Logic (Handles both directions)
+  const handleRefineIcebreaker = async () => {
+    if (!refineText.trim() || !icebreakerDraft) return;
+    setIsRefining(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/messages/refine-icebreaker`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentDraft: icebreakerDraft, instruction: refineText })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setIcebreakerDraft(data.draft);
+        setRefineText('');
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
   const handleSendIcebreaker = async () => {
     if (!icebreakerDraft.trim()) return;
     setIsSendingMessage(true);
-
     const receiverId = isAuthor && selectedCandidate ? selectedCandidate._id : (post.author._id || post.author);
-
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/messages/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          senderId: currentUser._id,
-          receiverId: receiverId,
-          text: icebreakerDraft
-        })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senderId: currentUser._id, receiverId: receiverId, text: icebreakerDraft })
       });
-
       if (response.ok) {
-        alert("Icebreaker sent successfully!");
+        alert("Icebreaker sent! Check your Messages tab.");
         setShowIcebreakerModal(false);
         if (isAuthor) setShowSuggestionsModal(false);
-      } else {
-        alert("Failed to send the message.");
       }
     } catch (error) {
-      console.error("Send Error:", error);
       alert("Failed to send message.");
     } finally {
       setIsSendingMessage(false);
@@ -196,9 +179,7 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
     navigator.clipboard.writeText(`Check out this post by @${authorHandle}:\n\n${postUrl}`);
     setShareCount(prev => prev + 1);
     alert("Post link copied to clipboard!");
-    try {
-       await fetch(`${import.meta.env.VITE_API_URL}/api/posts/${post._id}/share`, { method: 'PUT' });
-    } catch (e) { console.error("Share count update failed", e) }
+    try { await fetch(`${import.meta.env.VITE_API_URL}/api/posts/${post._id}/share`, { method: 'PUT' }); } catch (e) {}
   };
 
   const handleDelete = async () => {
@@ -206,11 +187,10 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/posts/${post._id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) onPostDeleted(post._id);
-    } catch (e) { console.error(e); }
+    } catch (e) {}
   };
   
   return (
@@ -237,7 +217,6 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
                <Link to={`/profile/${authorHandle}`} className="text-xs font-mono text-blue-500 hover:underline">@{authorHandle}</Link>
              </div>
           </div>
-          
           <div className="flex items-center gap-2 relative">
              <span className="text-xs text-slate-400">
                {new Date(post.createdAt).toLocaleDateString() === new Date().toLocaleDateString() ? 'Today' : new Date(post.createdAt).toLocaleDateString()}
@@ -275,10 +254,7 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
           <div className="mt-5 flex flex-wrap gap-2">
             {post.tags.map((tag, idx) => (
               <span key={idx} className={`rounded-full border px-3 py-1 text-xs font-bold shadow-[0_0_8px_rgba(0,0,0,0.1)] backdrop-blur-sm 
-                ${idx % 4 === 0 ? 'border-orange-500/50 text-orange-500' : 
-                  idx % 4 === 1 ? 'border-emerald-500/50 text-emerald-500' :
-                  idx % 4 === 2 ? 'border-blue-500/50 text-blue-500' : 
-                  'border-purple-500/50 text-purple-500'}`}>
+                ${idx % 4 === 0 ? 'border-orange-500/50 text-orange-500' : idx % 4 === 1 ? 'border-emerald-500/50 text-emerald-500' : idx % 4 === 2 ? 'border-blue-500/50 text-blue-500' : 'border-purple-500/50 text-purple-500'}`}>
                 {tag.startsWith('#') ? tag : `#${tag}`}
               </span>
             ))}
@@ -286,11 +262,6 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
         )}
 
         <div className="mt-5 flex items-center gap-6 border-t border-slate-100 pt-4 text-slate-500 dark:border-slate-800 dark:text-slate-400">
-          <button className="flex items-center gap-2 hover:text-blue-500 transition-colors">
-             <MessageSquare size={20} />
-             <span className="text-xs font-semibold">Comment</span>
-          </button>
-
           {/* AI ICEBREAKER BUTTON (For Receivers) */}
           {!isAuthor && (
             <button onClick={handleOpenIcebreaker} className="flex items-center gap-1.5 hover:text-purple-500 text-purple-600 dark:text-purple-400 transition-colors">
@@ -322,7 +293,7 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
               <div className="flex justify-between p-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
                 <div>
                   <h3 className="font-bold dark:text-white flex items-center gap-2"><Sparkles size={18} className="text-indigo-500"/> Suggested Teammates</h3>
-                  <p className="text-xs text-slate-500">Based on your post tags and requirements.</p>
+                  <p className="text-xs text-slate-500">Based on overlapping skills and interests.</p>
                 </div>
                 <button onClick={() => setShowSuggestionsModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
               </div>
@@ -330,7 +301,7 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
                 {isLoadingSuggestions ? (
                    <div className="flex flex-col items-center justify-center py-10">
                      <Loader2 className="animate-spin text-indigo-500 mb-3" size={32}/>
-                     <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Finding the best matches...</p>
+                     <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Finding matches...</p>
                    </div>
                 ) : suggestedUsers.length === 0 ? (
                    <p className="text-center text-sm text-slate-500 py-10">No users found matching these criteria right now.</p>
@@ -366,7 +337,6 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
                            </button>
                          </div>
                          
-                         {/* Match Analysis Section */}
                          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                            {!matchAnalyses[user._id] ? (
                              <button onClick={() => handleAnalyzeMatch(user._id)} disabled={analyzingMatchFor === user._id} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
@@ -391,7 +361,7 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
         )}
       </AnimatePresence>
 
-      {/* ICEBREAKER MODAL (Handles both Sender & Author logic) */}
+      {/* ICEBREAKER MODAL (Handles both Sender & Author logic + ChatGPT-style Refinement) */}
       <AnimatePresence>
         {showIcebreakerModal && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
@@ -402,7 +372,6 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
                     <Sparkles size={18} className={isAuthor ? "text-indigo-500" : "text-purple-500"}/> 
                     {isAuthor ? `Draft Pitch to ${selectedCandidate?.fullName}` : 'Draft AI Icebreaker'}
                   </h3>
-                  {isAuthor && <p className="text-xs text-slate-500 mt-1">Convince them to join your project.</p>}
                 </div>
                 <button onClick={() => setShowIcebreakerModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
               </div>
@@ -410,22 +379,40 @@ function BlueprintPostCard({ post, currentUser, onPostDeleted }) {
                 {isGeneratingIcebreaker ? (
                   <div className="flex flex-col items-center justify-center py-10">
                     <Loader2 className={`animate-spin mb-3 ${isAuthor ? 'text-indigo-500' : 'text-purple-500'}`} size={36}/>
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Analyzing Profiles...</p>
-                    <p className="text-xs text-slate-500 mt-1">Crafting the perfect intro message.</p>
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Analyzing Profiles & GitHub...</p>
                   </div>
                 ) : (
                   <>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Review and personalize your AI-generated message before sending:</p>
                     <textarea
                       value={icebreakerDraft}
                       onChange={(e) => setIcebreakerDraft(e.target.value)}
                       className="w-full min-h-[140px] rounded-xl border border-slate-200 p-4 text-sm outline-none bg-slate-50 dark:bg-slate-900/50 dark:border-slate-700 dark:text-white resize-none"
                     />
+                    
+                    {/* ChatGPT Style Refinement Box */}
+                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 p-1 bg-white dark:bg-slate-900">
+                      <input 
+                        type="text" 
+                        value={refineText}
+                        onChange={(e) => setRefineText(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleRefineIcebreaker(); }}
+                        placeholder="e.g., Make it shorter, Sound more formal..."
+                        className="flex-1 bg-transparent px-3 text-xs outline-none dark:text-white placeholder-slate-400"
+                      />
+                      <button 
+                        onClick={handleRefineIcebreaker} 
+                        disabled={!refineText.trim() || isRefining}
+                        className="shrink-0 flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50"
+                      >
+                        {isRefining ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>} Refine
+                      </button>
+                    </div>
+
                     <div className="mt-5 flex justify-end gap-3">
-                      <button onClick={() => setShowIcebreakerModal(false)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Cancel</button>
-                      <button onClick={handleSendIcebreaker} disabled={!icebreakerDraft.trim() || isSendingMessage} className={`${isAuthor ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-600/20'} text-white px-6 py-2 rounded-xl text-sm font-bold disabled:opacity-50 flex items-center gap-2 transition-colors shadow-lg`}>
+                      <button onClick={() => setShowIcebreakerModal(false)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">Cancel</button>
+                      <button onClick={handleSendIcebreaker} disabled={!icebreakerDraft.trim() || isSendingMessage} className={`${isAuthor ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-purple-600 hover:bg-purple-700'} text-white px-6 py-2 rounded-xl text-sm font-bold disabled:opacity-50 flex items-center gap-2 shadow-lg`}>
                         {isSendingMessage ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
-                        {isSendingMessage ? 'Sending...' : 'Send Message'}
+                        Send Message
                       </button>
                     </div>
                   </>
