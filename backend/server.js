@@ -21,6 +21,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/github', require('./routes/github'));
 app.use('/api/posts', require('./routes/posts')); // YAHAN NAYA POST ROUTE ADD KIYA
 app.use('/api', require('./routes/aiRoutes')); // AI tag wale route ke liye
+app.use('/api/messages', require('./routes/messageRoutes')); //msgs ke liy
+
 
 // 4. Health check route
 app.get('/', (req, res) => {

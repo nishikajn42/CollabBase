@@ -35,7 +35,8 @@ const userSchema = new mongoose.Schema({
   about: { type: String, default: "" },
   givenFeedbacks: [{ type: String }],
   receivedFeedbacks: [{ type: String }],
-  
+  lastActive: { type: Date, default: Date.now },
+
   links: [linkSchema],
   
   isProfileComplete: { type: Boolean, default: false }
