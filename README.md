@@ -101,3 +101,65 @@ npm install
 # 3. Install frontend dependencies
 cd ../collabbase-landing
 npm install
+```
+
+### Environment Variables
+
+Create `.env` in the `backend` directory:
+
+```env
+PORT=5000
+MONGO_URI=your_mongodb_connection_string
+JWT_SECRET=your_jwt_secret
+GEMINI_API_KEY=your_gemini_api_key
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+```
+
+### Run Locally
+
+```bash
+# Terminal 1: Start backend server
+cd backend
+npm run dev
+
+# Terminal 2: Start frontend client
+cd collabbase-landing
+npm run dev
+```
+
+## 📁 Project Structure
+
+```text
+CollabBase/
+├── collabbase-landing/  # React + Tailwind frontend
+│   └── src/
+│       ├── components/
+│       ├── pages/
+│       └── services/
+├── backend/             # Node + Express backend
+│   ├── controllers/
+│   ├── models/
+│   ├── routes/
+│   └── services/        # Gemini + GitHub integrations
+└── README.md
+```
+
+## 🗺 Roadmap
+
+- [x] Problem research & feature design
+- [ ] Authentication & GitHub proof-of-work profiles
+- [ ] Project posts with event tags & countdowns
+- [ ] Gemini-powered tech-stack extraction & matching
+- [ ] AI icebreaker generator
+- [ ] Vouch / reputation system
+- [ ] Pilot launch at one college / hackathon circuit
+- [ ] Organizer dashboard for bulk team balancing *(future scope)*
+
+## 👩‍💻 Author
+
+**Nishika Jain**
+
+## 📄 License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
