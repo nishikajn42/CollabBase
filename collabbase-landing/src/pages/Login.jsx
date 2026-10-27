@@ -24,18 +24,28 @@ const Login = ({ isDarkMode, onToggleTheme, onSignedIn }) => {
   const [error, setError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
-  const handleGoogleSuccess = async (tokenResponse) => {
+const handleGoogleSuccess = async (tokenResponse) => {
     setIsAuthenticating(true);
     try {
-      const backendResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/google-login`, {
+      // 1. Fallback to localhost if environment variable is missing
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      
+      const backendResponse = await fetch(`${apiUrl}/api/auth/google-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessToken: tokenResponse.access_token })
       });
 
+      // 2. Prevent JSON crash if backend returns HTML (e.g., Vite 404 page)
+      const contentType = backendResponse.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(`Backend did not return JSON. Verify server is running on ${apiUrl}`);
+      }
+
       const data = await backendResponse.json();
 
       if (!backendResponse.ok) {
+        // This will now correctly display backend errors like "Access restricted to campus students."
         setError(data.error || 'Failed to connect to database.');
         setIsAuthenticating(false);
         return;
@@ -51,8 +61,9 @@ const Login = ({ isDarkMode, onToggleTheme, onSignedIn }) => {
       }
       
     } catch (err) {
-      console.error(err);
-      setError('Authentication failed. Please try again.');
+      console.error("Login Connection Error:", err);
+      // 3. Display the actual network error on the UI instead of a generic fallback
+      setError(`Connection error: ${err.message}`);
       setIsAuthenticating(false);
     }
   };
