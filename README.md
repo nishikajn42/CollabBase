@@ -15,8 +15,6 @@
 
 </div>
 
----
-
 ## 📌 Table of Contents
 - [The Problem](#-the-problem)
 - [The Solution](#-the-solution)
@@ -27,8 +25,6 @@
 - [Project Structure](#-project-structure)
 - [Roadmap](#-roadmap)
 - [Author](#-author)
-
----
 
 ## ❗ The Problem
 
@@ -44,31 +40,25 @@ A strong frontend developer often can't find a backend or database developer bef
 | WhatsApp / Discord | Noisy, unsearchable, biased toward people who already know each other |
 | College notice boards | Slow, informal, limited to one campus |
 
----
-
 ## 💡 The Solution
 
 **CollabBase** is a MERN-stack platform that acts as a targeted, pre-competition staging ground. Developers post project ideas and the exact roles they need, then get matched intelligently, backed by **verified proof of work** instead of self-reported claims.
 
 ### Three core ideas
 
-1. **Proof-of-Work Profiles (GitHub API):** repositories, languages, and contribution history are pulled in automatically, replacing self-reported skill tags.
-2. **AI Matching Engine (Gemini API + NLP):** reads a plain-English post (e.g. *"building a food delivery app"*), extracts the implicit tech stack (React, Node, Maps API, Payments), then tags and routes the post to the right candidates.
-3. **AI Icebreaker Generator:** cross-references the team's required skills with an applicant's profile and drafts a personalized intro message, removing the "who messages first" friction.
-
----
+1. **Proof-of-Work Profiles (GitHub API):** Repositories, languages, and contribution history are pulled in automatically, replacing self-reported skill tags.
+2. **AI Matching Engine (Gemini API + NLP):** Reads a plain-English post (e.g. *"building a food delivery app"*), extracts the implicit tech stack (React, Node, Maps API, Payments), then tags and routes the post to the right candidates.
+3. **AI Icebreaker Generator:** Cross-references the team's required skills with an applicant's profile and drafts a personalized intro message, removing the "who messages first" friction.
 
 ## ✨ Key Features
 
-- **Proof-of-Work Integration:** top repos, languages, and contribution graph shown on the profile for instant vetting
-- **Reputation System (Vouches):** after an event, teammates vouch for each other (e.g. *"Great at meeting deadlines"*), building a track record that can't be faked
-- **Event Tags & Deadlines:** posts tied to specific events with a live countdown (e.g. *"Team lock-in ends in 4 days"*)
-- **Structured Swap Step:** AI suggests 2–3 profiles and both sides choose; it never auto-locks a team
-- **Compatibility Signals:** timezone/availability, commitment level, and past hackathon count
-- **GitHub-Based Role Fit Score:** e.g. *"70% backend-heavy commits"*, matched against the project's needs
-- **Vouches Feed Into Matching:** reliable teammates surface higher in future searches
-
----
+- **Proof-of-Work Integration:** Top repos, languages, and contribution graph shown on the profile for instant vetting.
+- **Reputation System (Vouches):** After an event, teammates vouch for each other (e.g. *"Great at meeting deadlines"*), building a track record that can't be faked.
+- **Event Tags & Deadlines:** Posts tied to specific events with a live countdown (e.g. *"Team lock-in ends in 4 days"*).
+- **Structured Swap Step:** AI suggests 2–3 profiles and both sides choose; it never auto-locks a team.
+- **Compatibility Signals:** Timezone/availability, commitment level, and past hackathon count.
+- **GitHub-Based Role Fit Score:** Matches backend/frontend heavy commit histories against the project's specific needs.
+- **Vouches Feed Into Matching:** Reliable teammates surface higher in future searches.
 
 ## 🔬 Research-Backed Design
 
@@ -79,109 +69,35 @@ A strong frontend developer often can't find a backend or database developer bef
 | Skill survey + LLM requirement extraction + dynamic matching improves coverage (capstone study) | Same pipeline: user skills + AI-extracted tags + smart routing |
 | New platforms fail from the cold-start problem (Flip case study) | Launch with one college / one hackathon circuit; reward early vouches |
 
----
-
 ## 🛠 Tech Stack
 
 | Layer | Technology |
 |---|---|
 | Frontend | React.js, Tailwind CSS |
-| Backend | Node.js, Express |
-| Database | MongoDB |
-| AI | Google Gemini API |
-| Integrations | GitHub REST API |
-
----
+| Backend | Node.js, Express.js |
+| Database | MongoDB, Mongoose |
+| AI Integration | `@google/generative-ai` (Gemini 1.5 Flash) |
+| External APIs | GitHub REST API |
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 - Node.js (v18+)
 - MongoDB (local or Atlas)
-- Gemini API key
+- Google AI Studio API key (Gemini)
 - GitHub OAuth app / personal access token
 
 ### Installation
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/nishikajn42/CollabBase.git
-cd collabbase
+git clone [https://github.com/nishikajn42/CollabBase.git](https://github.com/nishikajn42/CollabBase.git)
+cd CollabBase
 
 # 2. Install backend dependencies
-cd server
+cd backend
 npm install
 
 # 3. Install frontend dependencies
-cd ../client
+cd ../collabbase-landing
 npm install
-```
-
-### Environment Variables
-
-Create `server/.env`:
-
-```env
-PORT=5000
-MONGO_URI=your_mongodb_connection_string
-JWT_SECRET=your_jwt_secret
-GEMINI_API_KEY=your_gemini_api_key
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
-```
-
-### Run locally
-
-```bash
-# Terminal 1: backend
-cd server
-npm run dev
-
-# Terminal 2: frontend
-cd client
-npm run dev
-```
-
----
-
-## 📁 Project Structure
-
-```
-collabbase/
-├── client/          # React + Tailwind frontend
-│   └── src/
-│       ├── components/
-│       ├── pages/
-│       └── services/
-├── server/          # Node + Express backend
-│   ├── controllers/
-│   ├── models/
-│   ├── routes/
-│   └── services/    # Gemini + GitHub integrations
-└── README.md
-```
-
----
-
-## 🗺 Roadmap
-
-- [x] Problem research & feature design
-- [ ] Authentication & GitHub proof-of-work profiles
-- [ ] Project posts with event tags & countdowns
-- [ ] Gemini-powered tech-stack extraction & matching
-- [ ] AI icebreaker generator
-- [ ] Vouch / reputation system
-- [ ] Pilot launch at one college / hackathon circuit
-- [ ] Organizer dashboard for bulk team balancing *(future scope)*
-
----
-
-## 👩‍💻 Author
-
-**Nishika Jain**
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
